@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.exceptions import InvalidSignature
@@ -60,6 +60,24 @@ RECOVERY_COUPON = env("RECOVERY_COUPON", "VOLTA15").upper()      # cupom de recu
 RECOVERY_DISCOUNT = float(env("RECOVERY_DISCOUNT", "0.85"))      # 15% off (os 10% + 5% a mais)
 RESEND_API_KEY = env("RESEND_API_KEY", "")                       # e-mail transacional (Resend)
 RESEND_FROM = env("RESEND_FROM", "Liquix <noreply@liquix.tech>")
+OWNER_EMAIL = env("OWNER_EMAIL", "digitalsoberano05@gmail.com")   # avisos pro dono
+META_PIXEL_ID = env("META_PIXEL_ID", "")                          # Meta Pixel (tráfego pago)
+META_CAPI_TOKEN = env("META_CAPI_TOKEN", "")                      # Conversions API (server-side)
+
+PIXEL_SNIPPET = ("<script>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){"
+                 "n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};"
+                 "if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];"
+                 "t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];"
+                 "s.parentNode.insertBefore(t,s)}(window,document,'script',"
+                 "'https://connect.facebook.net/en_US/fbevents.js');"
+                 "fbq('init','%s');fbq('track','PageView');</script>")
+
+# Pacotes de tráfego pago gerenciado (Turbine) — sua margem embutida no preço
+TURBINE = {
+    "impulso": {"label": "Impulso", "valor": "R$ 97",  "desc": "Teste: ~3 dias de anúncio no seu link."},
+    "turbo":   {"label": "Turbo",   "valor": "R$ 297", "desc": "~10 dias de anúncio + criativo pronto."},
+    "escala":  {"label": "Escala",  "valor": "R$ 597", "desc": "Campanha completa + otimização."},
+}
 
 app = FastAPI(title="Ponte Vende em Tudo")
 
@@ -98,6 +116,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT DEFAULT 'vendas_mes',
             titulo TEXT, vendas INTEGER, bonus_cents INTEGER,
             active INTEGER DEFAULT 1, created_at TEXT);
+        CREATE TABLE IF NOT EXISTS turbine_requests(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, affiliate_code TEXT, pacote TEXT,
+            status TEXT DEFAULT 'novo', created_at TEXT);
         """)
         # colunas de afiliado nos pedidos (idempotente)
         for col, ddl in (("affiliate_code", "TEXT"),
@@ -317,6 +338,27 @@ async def frappe_enroll(email, name, course):
         if er.status_code not in (200, 201, 409, 417):
             raise RuntimeError(f"Frappe enroll falhou {er.status_code}: {er.text[:300]}")
 
+async def fb_capi(order):
+    """Envia o Purchase pro Meta Conversions API (server-side). No-op se não configurado."""
+    if not (META_PIXEL_ID and META_CAPI_TOKEN) or not order:
+        return
+    import hashlib, time
+    email = (order.get("email") or "").strip().lower()
+    ev = {"event_name": "Purchase", "event_time": int(time.time()),
+          "event_id": order.get("order_id"), "action_source": "website",
+          "event_source_url": PUBLIC_BASE + "/comprar",
+          "user_data": {"em": [hashlib.sha256(email.encode()).hexdigest()]} if email else {},
+          "custom_data": {"currency": "BRL",
+                          "value": round((order.get("amount_cents") or 0) / 100.0, 2),
+                          "content_name": order.get("plan") or "",
+                          "ref": order.get("affiliate_code") or ""}}
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            await c.post("https://graph.facebook.com/v19.0/%s/events" % META_PIXEL_ID,
+                         params={"access_token": META_CAPI_TOKEN}, json={"data": [ev]})
+    except Exception:
+        pass
+
 async def do_enroll(order):
     plan = PLANS.get(order["plan"], {})
     course = plan.get("course")
@@ -329,6 +371,7 @@ async def do_enroll(order):
             await frappe_enroll(order["email"], order.get("name"), bp["course"])
     mark_order(order["order_id"], enrolled=1, status="paid")
     credit_commission(order["order_id"])
+    await fb_capi(order)   # conversão server-side (Meta CAPI)
 
 # ------------------------------------------------------------------ Cobrix (Pix)
 async def cobrix_create_charge(name, cpf, amount_cents, description):
@@ -427,14 +470,18 @@ async def health():
 
 @app.get("/comprar")
 async def comprar():
-    return FileResponse("/app/checkout.html")
+    html = open("/app/checkout.html", encoding="utf-8").read()
+    if META_PIXEL_ID:
+        html = html.replace("</head>", (PIXEL_SNIPPET % META_PIXEL_ID) + "</head>", 1)
+    return HTMLResponse(html)
 
 @app.get("/order-status/{order_id}")
 async def order_status(order_id: str):
     o = find_order(order_id=order_id)
     if not o:
         raise HTTPException(404, "pedido não encontrado")
-    return {"order_id": order_id, "status": o["status"], "enrolled": bool(o["enrolled"]), "plan": o["plan"]}
+    return {"order_id": order_id, "status": o["status"], "enrolled": bool(o["enrolled"]),
+            "plan": o["plan"], "amount_cents": o["amount_cents"]}
 
 @app.post("/checkout")
 async def checkout(req: Request):
@@ -531,6 +578,38 @@ async def afiliados_page():
 async def afiliados_painel():
     return FileResponse("/app/painel.html")
 
+@app.get("/a/{code}")
+async def bio_page(code: str):
+    af = get_affiliate(code=code)
+    if not af:
+        raise HTTPException(404, "afiliado não encontrado")
+    html = open("/app/bio.html", encoding="utf-8").read()
+    nome = (af.get("name") or "").strip()
+    html = (html.replace("__NOME__", nome.split(" ")[0] if nome else "")
+                .replace("__REF__", code)
+                .replace("__CUPOM__", af.get("coupon") or ""))
+    if META_PIXEL_ID:
+        html = html.replace("</head>", (PIXEL_SNIPPET % META_PIXEL_ID) + "</head>", 1)
+    return HTMLResponse(html)
+
+@app.post("/api/af/turbine")
+async def af_turbine(req: Request):
+    af = af_from_req(req)
+    d = await req.json()
+    pac = (d.get("pacote") or "").strip().lower()
+    if pac not in TURBINE:
+        raise HTTPException(400, "pacote inválido")
+    t = TURBINE[pac]
+    with contextlib.closing(db()) as con:
+        con.execute("INSERT INTO turbine_requests(affiliate_code,pacote,status,created_at) VALUES(?,?,?,?)",
+                    (af["code"], pac, "novo", now_iso()))
+        con.commit()
+    corpo = ("<p>O afiliado <b>%s</b> (código %s) pediu o pacote de tráfego pago <b>%s · %s</b>.</p>"
+             "<p>Link de venda dele: %s</p><p>Combine o pagamento e rode a campanha.</p>"
+             % (af.get("name") or "", af["code"], t["label"], t["valor"], aff_link(af["code"])))
+    await send_email(OWNER_EMAIL, "🚀 Turbine: %s quer o pacote %s" % (af.get("name") or af["code"], t["label"]), corpo)
+    return {"ok": True, "pacote": t["label"]}
+
 @app.post("/api/af/signup")
 async def af_signup(req: Request):
     d = await req.json()
@@ -602,6 +681,7 @@ async def af_me(req: Request):
     return {"code": af["code"], "name": af["name"], "pct": af["pct"],
             "link": aff_link(af["code"]), "coupon": af.get("coupon"),
             "recruit_link": recruit_link(af["code"]), "subs": subs,
+            "bio_link": PUBLIC_BASE + "/a/" + af["code"],
             "give_pct": af.get("give_pct") if af.get("give_pct") is not None else DEFAULT_SUB_PCT,
             "liquid_wallet": af["liquid_wallet"], "usdt_wallet": af["usdt_wallet"],
             "pix_key": af.get("pix_key") or "", "payout_method": af.get("payout_method") or "pix",

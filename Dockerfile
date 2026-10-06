@@ -6,6 +6,7 @@ COPY app.py .
 COPY checkout.html .
 COPY afiliados.html .
 COPY painel.html .
+COPY bio.html .
 COPY admin.html .
 COPY ferramentas.html .
 COPY widget.js .

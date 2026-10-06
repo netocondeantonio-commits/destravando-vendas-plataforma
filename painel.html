@@ -64,6 +64,13 @@ th{color:var(--mut);font-weight:600}
     <div class="linkbox"><input id="coupon" readonly><button class="mini" onclick="copyCoupon(this)">Copiar</button></div>
   </div>
 
+  <div class="card">
+    <h2>📣 Sua página pronta pra divulgar</h2>
+    <div class="lbl">Uma página só sua, com o curso e seus links — manda no Insta, no status, na bio. Toda venda por ela conta pra você.</div>
+    <div class="linkbox"><input id="bio" readonly><button class="mini" onclick="copyBio(this)">Copiar</button></div>
+    <a id="bioOpen" href="#" target="_blank" class="lbl" style="display:inline-block;margin-top:.5rem;color:var(--teal)">abrir minha página ↗</a>
+  </div>
+
   <div class="card" style="border-color:#c98a2e;background:linear-gradient(180deg,#1a140a,#0c1a17)">
     <h2>⛏️ Mine BTC sem máquina</h2>
     <div class="lbl">O jeito mais <b>rápido e barato</b> de começar a minerar bitcoin: sem equipamento, sem conta de luz. Cada venda indicada vira <b>satoshis direto na sua carteira</b> — você escolhe receber em BTC on-chain ou Lightning no cadastro da carteira abaixo.</div>
@@ -98,6 +105,13 @@ th{color:var(--mut);font-weight:600}
     </div>
     <div id="m_list"><div class="lbl">—</div></div>
     <div class="note">Bata a meta e o <b>bônus cai junto com sua comissão no dia 05</b>. 🚀</div>
+  </div>
+
+  <div class="card" style="border-color:#c98a2e;background:linear-gradient(180deg,#1a140a,#0c1a17)">
+    <h2>🚀 Turbine suas vendas (tráfego pago)</h2>
+    <div class="lbl">Não sabe mexer com anúncio? A gente <b>roda o anúncio pra você</b>, no seu link. Escolha um pacote e te chamamos pra combinar.</div>
+    <div id="turbpacks" style="margin-top:.8rem"></div>
+    <div class="okmsg" id="turbOk"></div>
   </div>
 
   <div class="card">
@@ -135,6 +149,17 @@ function logout(){try{localStorage.removeItem('af_token');localStorage.removeIte
 function copyLink(b){var i=document.getElementById('link');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
 function copyCoupon(b){var i=document.getElementById('coupon');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
 function copyRecruit(b){var i=document.getElementById('recruit');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
+function copyBio(b){var i=document.getElementById('bio');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
+var TURB=[['impulso','Impulso','R$ 97','Teste: ~3 dias de anúncio no seu link'],['turbo','Turbo','R$ 297','~10 dias de anúncio + criativo pronto'],['escala','Escala','R$ 597','Campanha completa + otimização']];
+function renderTurb(){var el=document.getElementById('turbpacks');if(!el)return;el.innerHTML=TURB.map(function(p){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;border:1px solid var(--line);border-radius:12px;padding:.7rem .8rem;margin-bottom:.6rem"><div><b>'+p[1]+'</b> · '+p[2]+'<div class="lbl">'+p[3]+'</div></div><button class="mini" onclick="turbine(\''+p[0]+'\',this)">Quero</button></div>';
+}).join('');}
+function turbine(pac,btn){var t=btn.textContent;btn.disabled=true;btn.textContent='...';document.getElementById('turbOk').textContent='';
+  fetch('/api/af/turbine',{method:'POST',headers:hdr(),body:JSON.stringify({pacote:pac})}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok){document.getElementById('turbOk').textContent='✓ Pedido enviado! A gente te chama pra combinar o pacote '+(d.pacote||'')+'.';btn.textContent='Pedido ✓';}
+    else{document.getElementById('turbOk').textContent='Erro, tente de novo.';btn.textContent=t;btn.disabled=false;}
+    setTimeout(function(){btn.textContent=t;btn.disabled=false;},2500);
+  }).catch(function(){btn.textContent=t;btn.disabled=false;document.getElementById('turbOk').textContent='Erro de conexão.';});}
 function hdr(){return {'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'};}
 function load(){
   fetch('/api/af/me',{headers:hdr()}).then(function(r){if(r.status===401){logout();return null;}return r.json();}).then(function(d){
@@ -142,6 +167,8 @@ function load(){
     document.getElementById('link').value=d.link;
     document.getElementById('coupon').value=d.coupon||'';
     document.getElementById('recruit').value=d.recruit_link||'';
+    document.getElementById('bio').value=d.bio_link||'';
+    var _bo=document.getElementById('bioOpen');if(_bo)_bo.href=d.bio_link||'#';
     document.getElementById('st_subs').textContent=d.subs||0;
     document.getElementById('st_over').textContent=money((d.totals&&d.totals.override_cents)||0);
     document.getElementById('give').value=(d.give_pct!=null?d.give_pct:15);
@@ -186,6 +213,7 @@ function saveWallet(b){
    .catch(function(){w.textContent='Erro ao salvar';b.disabled=false;});
 }
 load();
+renderTurb();
 </script>
 </body>
 </html>

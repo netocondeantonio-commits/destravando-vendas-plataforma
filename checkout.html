@@ -134,12 +134,13 @@ Array.prototype.forEach.call(document.querySelectorAll('input[name=met]'),functi
 var poll=null;
 function startPoll(oid){poll=setInterval(function(){
   fetch('/order-status/'+oid).then(function(r){return r.json();}).then(function(d){
-    if(d.enrolled){clearInterval(poll);done();}
+    if(d.enrolled){clearInterval(poll);done(d.amount_cents,oid);}
     else if(['valor_divergente','failed','canceled','expired'].indexOf(d.status)>=0){clearInterval(poll);
       document.getElementById('result').innerHTML='<p style="color:var(--warn)">Pagamento não concluído ('+d.status+'). Recarregue e tente de novo.</p>';}
   }).catch(function(){});
 },4000);}
-function done(){document.getElementById('result').innerHTML='<p class="ok">✓ Pagamento confirmado!</p><p class="muted">Você já está matriculado. Acesse em <a href="https://cursos.liquix.tech/login" target="_blank">cursos.liquix.tech</a> com o e-mail informado.</p>';}
+function done(cents,oid){try{if(window.fbq)fbq('track','Purchase',{value:((cents||0)/100)||0,currency:'BRL'},{eventID:oid||''});}catch(e){}
+  document.getElementById('result').innerHTML='<p class="ok">✓ Pagamento confirmado!</p><p class="muted">Você já está matriculado. Acesse em <a href="https://cursos.liquix.tech/login" target="_blank">cursos.liquix.tech</a> com o e-mail informado.</p>';}
 function copyPix(btn){var i=document.getElementById('pix');navigator.clipboard.writeText(i.value).then(function(){btn.textContent='Copiado!';}).catch(function(){i.select();});}
 document.getElementById("go").addEventListener("click",function(){
   var email=document.getElementById('email').value.trim();
@@ -154,6 +155,7 @@ document.getElementById("go").addEventListener("click",function(){
   .then(function(o){
     if(!o.ok){err.textContent=(o.d.detail||'Erro ao gerar pagamento.');btn.disabled=false;btn.textContent='Gerar pagamento';return;}
     var d=o.d;document.getElementById('formCard').style.display='none';
+    try{if(window.fbq)fbq('track','InitiateCheckout',{value:(priceFor(met())+(bumpOn()?49.90:0)),currency:'BRL'});}catch(e){}
     var res=document.getElementById('result');res.style.display='block';
     if(met()==='pix'){
       res.innerHTML='<div class="qr"><p class="muted">Escaneie no app do banco ou copie o código:</p>'+
