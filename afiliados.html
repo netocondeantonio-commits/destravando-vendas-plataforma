@@ -36,7 +36,8 @@ input:focus{outline:none;border-color:var(--teal)}
 <div class="wrap">
   <div class="brand"><span class="m">D</span>Destravando as Vendas</div>
   <div class="card">
-    <div class="badge">💸 Ganhe 20% por venda indicada</div>
+    <div class="badge">⛏️ Minere BTC sem máquina</div>
+    <div id="invited" style="display:none;font-size:.85rem;color:var(--teal);border:1px solid var(--teal2);border-radius:10px;padding:.5rem .7rem;margin-bottom:.9rem"></div>
     <div class="tabs">
       <div class="tab sel" id="tSign" onclick="mode('signup')">Criar conta</div>
       <div class="tab" id="tLogin" onclick="mode('login')">Entrar</div>
@@ -44,7 +45,7 @@ input:focus{outline:none;border-color:var(--teal)}
 
     <div id="signup">
       <h1>Seja um afiliado</h1>
-      <div class="sub">Indique o curso e receba <b>20% de comissão</b> em cada venda, paga todo dia 05 na sua carteira.</div>
+      <div class="sub">O jeito mais <b>rápido e barato</b> de começar a minerar bitcoin: sem equipamento, sem conta de luz. Indique o curso, receba <b>20% por venda</b> e saque em <b>BTC on-chain ou Lightning</b> todo dia 05 — cada venda vira satoshis na sua carteira.</div>
       <label>Seu nome</label><input id="s_name" placeholder="Nome completo">
       <label>E-mail</label><input id="s_email" type="email" placeholder="voce@email.com">
       <label>Senha (mínimo 6)</label><input id="s_pass" type="password" placeholder="crie uma senha">
@@ -82,9 +83,11 @@ function post(url,body,btn,label){
    .then(function(o){if(!o.ok){err.textContent=o.d.detail||'Erro.';btn.disabled=false;btn.textContent=t;return;}save(o.d);})
    .catch(function(){err.textContent='Falha de conexão.';btn.disabled=false;btn.textContent=t;});
 }
+var REF_AF='';try{REF_AF=(new URLSearchParams(location.search).get('ref_af')||'').trim();}catch(e){}
+if(REF_AF){var ib=document.getElementById('invited');if(ib){ib.style.display='block';ib.textContent='✔ Você foi convidado pelo afiliado '+REF_AF+'. Você entra como indicado dele.';}}
 document.getElementById('bSign').addEventListener('click',function(){
   post('/api/af/signup',{name:s_name.value.trim(),email:s_email.value.trim(),password:s_pass.value,
-    liquid_wallet:s_liquid.value.trim(),usdt_wallet:s_usdt.value.trim(),coupon:s_coupon.value.trim()},this);
+    liquid_wallet:s_liquid.value.trim(),usdt_wallet:s_usdt.value.trim(),coupon:s_coupon.value.trim(),parent:REF_AF},this);
 });
 document.getElementById('bLogin').addEventListener('click',function(){
   post('/api/af/login',{email:l_email.value.trim(),password:l_pass.value},this);

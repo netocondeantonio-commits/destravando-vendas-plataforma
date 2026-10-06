@@ -56,10 +56,26 @@ th{color:var(--mut);font-weight:600}
     <div class="linkbox"><input id="coupon" readonly><button class="mini" onclick="copyCoupon(this)">Copiar</button></div>
   </div>
 
+  <div class="card" style="border-color:#c98a2e;background:linear-gradient(180deg,#1a140a,#0c1a17)">
+    <h2>⛏️ Mine BTC sem máquina</h2>
+    <div class="lbl">O jeito mais <b>rápido e barato</b> de começar a minerar bitcoin: sem equipamento, sem conta de luz. Cada venda indicada vira <b>satoshis direto na sua carteira</b> — você escolhe receber em BTC on-chain ou Lightning no cadastro da carteira abaixo.</div>
+    <div class="lbl" style="margin-top:.9rem">Chame outras pessoas pra vender com este link. Quem entrar por ele vira <b>seu indicado</b> — e você ganha um <b>override</b> em cada venda que ele fizer, pra sempre.</div>
+    <div class="linkbox"><input id="recruit" readonly><button class="mini" onclick="copyRecruit(this)">Copiar</button></div>
+    <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-top:.9rem">
+      <div class="stat"><div class="n g" id="st_subs">0</div><div class="l">seus indicados</div></div>
+      <div class="stat"><div class="n g" id="st_over">R$ 0,00</div><div class="l">override acumulado</div></div>
+    </div>
+    <label>Quanto seu indicado ganha por venda (%)</label>
+    <input class="w" id="give" type="number" min="0" max="40" step="1" placeholder="15">
+    <div class="lbl" style="margin-top:.5rem">Você define a regra. O bolo é a comissão cheia do plano (20% nos cursos, 40% no Ponto de Coleta). O que você <b>der</b> ao indicado sai desse bolo; o <b>resto fica com você</b> como override. Ex.: dá 15% → você fica com 5% em cada venda dele (25% no Ponto).</div>
+    <button class="save" onclick="saveGive(this)">Salvar regra</button>
+    <div class="okmsg" id="gok"></div>
+  </div>
+
   <div class="card">
     <h2>Suas comissões</h2>
     <div class="stats">
-      <div class="stat"><div class="n" id="st_count">0</div><div class="l">vendas</div></div>
+      <div class="stat"><div class="n" id="st_count">0</div><div class="l">comissões</div></div>
       <div class="stat"><div class="n g" id="st_pend">R$ 0,00</div><div class="l">a receber</div></div>
       <div class="stat"><div class="n" id="st_paid">R$ 0,00</div><div class="l">já pago</div></div>
     </div>
@@ -88,7 +104,7 @@ th{color:var(--mut);font-weight:600}
 
   <div class="card">
     <h2>Histórico</h2>
-    <table><thead><tr><th>Data</th><th>Plano</th><th>Venda</th><th>Comissão</th><th>Status</th></tr></thead>
+    <table><thead><tr><th>Data</th><th>Plano</th><th>Tipo</th><th>Comissão</th><th>Status</th></tr></thead>
     <tbody id="rows"><tr><td colspan="5" class="lbl">Sem vendas ainda. Divulgue seu link! 🚀</td></tr></tbody></table>
   </div>
 </div>
@@ -99,12 +115,17 @@ function money(c){return 'R$ '+((c||0)/100).toFixed(2).replace('.',',');}
 function logout(){try{localStorage.removeItem('af_token');localStorage.removeItem('af_code');}catch(e){}location.href='/afiliados';}
 function copyLink(b){var i=document.getElementById('link');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
 function copyCoupon(b){var i=document.getElementById('coupon');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
+function copyRecruit(b){var i=document.getElementById('recruit');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
 function hdr(){return {'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'};}
 function load(){
   fetch('/api/af/me',{headers:hdr()}).then(function(r){if(r.status===401){logout();return null;}return r.json();}).then(function(d){
     if(!d)return;
     document.getElementById('link').value=d.link;
     document.getElementById('coupon').value=d.coupon||'';
+    document.getElementById('recruit').value=d.recruit_link||'';
+    document.getElementById('st_subs').textContent=d.subs||0;
+    document.getElementById('st_over').textContent=money((d.totals&&d.totals.override_cents)||0);
+    document.getElementById('give').value=(d.give_pct!=null?d.give_pct:15);
     document.getElementById('st_count').textContent=d.totals.count;
     document.getElementById('st_pend').textContent=money(d.totals.pending_cents);
     document.getElementById('st_paid').textContent=money(d.totals.paid_cents);
@@ -118,9 +139,16 @@ function load(){
     if(d.sales&&d.sales.length){tb.innerHTML=d.sales.map(function(s){
       var dt=(s.created_at||'').slice(0,10).split('-').reverse().join('/');
       var pill=s.commission_status==='paid'?'<span class="pill pg">pago</span>':'<span class="pill p">a receber</span>';
-      return '<tr><td>'+dt+'</td><td>'+s.plan+'</td><td>'+money(s.amount_cents)+'</td><td>'+money(s.commission_cents)+'</td><td>'+pill+'</td></tr>';
+      var tipo=s.nivel==='indicação'?'<span class="pill" style="background:#10243a;color:#8fc7ff">indicação</span>':'direta';
+      return '<tr><td>'+dt+'</td><td>'+(s.plan||'')+'</td><td>'+tipo+'</td><td>'+money(s.commission_cents)+'</td><td>'+pill+'</td></tr>';
     }).join('');}
   }).catch(function(){});
+}
+function saveGive(b){
+  var w=document.getElementById('gok');w.textContent='';b.disabled=true;
+  fetch('/api/af/wallet',{method:'POST',headers:hdr(),body:JSON.stringify({give_pct:document.getElementById('give').value})})
+   .then(function(r){return r.json();}).then(function(){w.textContent='✓ Regra salva';b.disabled=false;})
+   .catch(function(){w.textContent='Erro ao salvar';b.disabled=false;});
 }
 function saveWallet(b){
   var w=document.getElementById('wok');w.textContent='';b.disabled=true;

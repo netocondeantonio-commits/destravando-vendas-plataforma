@@ -38,6 +38,11 @@ PUBLIC_BASE           = env("PUBLIC_BASE", "https://pagamentos.liquix.tech").rst
 DB_PATH               = env("DB_PATH", "/data/ponte.db")
 REPLAY_WINDOW_S       = int(env("REPLAY_WINDOW_S", "300"))
 ADMIN_KEY             = env("ADMIN_KEY", "")   # chave do painel admin de afiliados
+BTC_SEND_URL          = env("BTC_SEND_URL", "")   # endpoint do enviador de BTC do dono (a plataforma chama)
+BTC_SEND_KEY          = env("BTC_SEND_KEY", "")   # autenticação do enviador (X-Api-Key)
+PAYOUT_MAX_CENTS      = int(env("PAYOUT_MAX_CENTS", "100000"))  # teto por pagamento (trava anti-erro)
+OVERRIDE_PCT          = float(env("OVERRIDE_PCT", "5"))   # (legado) fallback antigo de override
+DEFAULT_SUB_PCT       = float(env("DEFAULT_SUB_PCT", "15"))  # MLM: quanto o indicado ganha por venda quando o mestre não definiu
 
 # plano -> valor (centavos, já com taxas embutidas) + curso no LMS + valor USDT p/ cartão
 PLANS = {
@@ -76,6 +81,15 @@ def init_db():
             liquid_wallet TEXT DEFAULT '', usdt_wallet TEXT DEFAULT '', pct REAL DEFAULT 20,
             token TEXT, created_at TEXT);
         CREATE INDEX IF NOT EXISTS idx_af_token ON affiliates(token);
+        CREATE TABLE IF NOT EXISTS payouts(
+            idem_key TEXT PRIMARY KEY, affiliate_code TEXT, month TEXT, method TEXT,
+            destino TEXT, cents INTEGER, status TEXT, txid TEXT, created_at TEXT);
+        CREATE TABLE IF NOT EXISTS commissions(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT, affiliate_code TEXT,
+            level INTEGER DEFAULT 1, cents INTEGER, status TEXT DEFAULT 'pending',
+            created_at TEXT, updated_at TEXT);
+        CREATE INDEX IF NOT EXISTS idx_comm_af ON commissions(affiliate_code);
+        CREATE INDEX IF NOT EXISTS idx_comm_order ON commissions(order_id);
         """)
         # colunas de afiliado nos pedidos (idempotente)
         for col, ddl in (("affiliate_code", "TEXT"),
@@ -90,7 +104,9 @@ def init_db():
                            ("payout_method", "TEXT DEFAULT 'pix'"),
                            ("pix_key", "TEXT DEFAULT ''"),
                            ("btc_address", "TEXT DEFAULT ''"),
-                           ("ln_address", "TEXT DEFAULT ''")):
+                           ("ln_address", "TEXT DEFAULT ''"),
+                           ("parent_code", "TEXT"),
+                           ("give_pct", "REAL")):
             try:
                 con.execute(f"ALTER TABLE affiliates ADD COLUMN {acol} {addl}")
             except sqlite3.OperationalError:
@@ -146,6 +162,9 @@ def gen_code(email):
 def aff_link(code):
     return f"https://curso.liquix.tech/?ref={code}"
 
+def recruit_link(code):
+    return PUBLIC_BASE + "/afiliados?ref_af=" + code
+
 def _fee_cents(method, amount_cents):
     """Taxa de pagamento — descontada da comissão do afiliado."""
     if method == "pix":
@@ -154,17 +173,41 @@ def _fee_cents(method, amount_cents):
 
 def credit_commission(order_id):
     o = find_order(order_id=order_id)
-    if not o or not o.get("affiliate_code") or o.get("commission_status"):
+    if not o or not o.get("affiliate_code"):
         return
+    with contextlib.closing(db()) as con:
+        if con.execute("SELECT 1 FROM commissions WHERE order_id=?", (order_id,)).fetchone():
+            return  # já creditado (idempotente)
     af = get_affiliate(code=o["affiliate_code"])
     if not af:
         return
-    plan = PLANS.get(o["plan"], {})
-    pct = plan.get("commission_pct") or af.get("pct") or 20
     gross = o["amount_cents"] or 0
     net = max(0, gross - _fee_cents(o["method"], gross))   # líquido após taxa
-    cents = round(net * pct / 100.0)
-    mark_order(order_id, commission_cents=cents, commission_status="pending")
+    plan = PLANS.get(o["plan"], {})
+    pct = plan.get("commission_pct") or af.get("pct") or 20
+    pool = round(net * pct / 100.0)                         # bolo total que a casa paga nessa venda
+    parent = af.get("parent_code")                          # MLM: quem indicou esse afiliado
+    paf = get_affiliate(code=parent) if parent else None
+    if paf:
+        # o mestre (quem indicou) escolhe quanto o indicado ganha; ele fica com o resto do bolo
+        give = paf.get("give_pct")
+        give = DEFAULT_SUB_PCT if give is None else float(give)
+        direct = round(net * give / 100.0)
+        if direct > pool:
+            direct = pool                                  # nunca paga mais que o bolo do plano
+        over = pool - direct                               # override do mestre = sobra do bolo
+        entries = [(o["affiliate_code"], 1, direct)]
+        if over > 0:
+            entries.append((parent, 2, over))
+    else:
+        direct = pool                                      # venda direta: afiliado leva o bolo inteiro
+        entries = [(o["affiliate_code"], 1, direct)]
+    with contextlib.closing(db()) as con:
+        for (code, lvl, cents) in entries:
+            con.execute("""INSERT INTO commissions(order_id,affiliate_code,level,cents,status,created_at,updated_at)
+                           VALUES(?,?,?,?,?,?,?)""", (order_id, code, lvl, cents, "pending", now_iso(), now_iso()))
+        con.execute("UPDATE orders SET commission_cents=?, commission_status='pending' WHERE order_id=?", (direct, order_id))
+        con.commit()
 
 def save_order(o):
     with contextlib.closing(db()) as con:
@@ -440,14 +483,16 @@ async def af_signup(req: Request):
         raise HTTPException(409, "já existe cadastro com esse e-mail — faça login")
     code = gen_code(email)
     coupon = gen_coupon(name, code, d.get("coupon"))
+    parent = (d.get("parent") or d.get("ref_af") or "").strip()
+    parent_code = parent if (parent and parent != code and get_affiliate(code=parent)) else None
     ph, salt = _hash_pw(password)
     token = secrets.token_urlsafe(24)
     with contextlib.closing(db()) as con:
-        con.execute("""INSERT INTO affiliates(code,name,email,pass_hash,salt,liquid_wallet,usdt_wallet,pct,coupon,token,created_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        con.execute("""INSERT INTO affiliates(code,name,email,pass_hash,salt,liquid_wallet,usdt_wallet,pct,coupon,parent_code,token,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (code, name, email, ph, salt,
                      (d.get("liquid_wallet") or "").strip(),
-                     (d.get("usdt_wallet") or "").strip(), 20, coupon, token, now_iso()))
+                     (d.get("usdt_wallet") or "").strip(), 20, coupon, parent_code, token, now_iso()))
         con.commit()
     return {"code": code, "token": token, "link": aff_link(code), "coupon": coupon}
 
@@ -466,35 +511,47 @@ async def af_me(req: Request):
     af = af_from_req(req)
     with contextlib.closing(db()) as con:
         rows = [dict(r) for r in con.execute(
-            """SELECT created_at, plan, amount_cents, commission_cents, commission_status
-               FROM orders WHERE affiliate_code=? AND enrolled=1
-               ORDER BY created_at DESC""", (af["code"],)).fetchall()]
-    pend = sum((r["commission_cents"] or 0) for r in rows if r["commission_status"] == "pending")
-    paid = sum((r["commission_cents"] or 0) for r in rows if r["commission_status"] == "paid")
+            """SELECT c.created_at, c.level, c.cents, c.status, o.plan
+               FROM commissions c JOIN orders o ON o.order_id=c.order_id
+               WHERE c.affiliate_code=? ORDER BY c.created_at DESC""", (af["code"],)).fetchall()]
+        subs = con.execute("SELECT COUNT(*) n FROM affiliates WHERE parent_code=?", (af["code"],)).fetchone()["n"]
+    pend = sum(r["cents"] for r in rows if r["status"] == "pending")
+    paid = sum(r["cents"] for r in rows if r["status"] == "paid")
+    over = sum(r["cents"] for r in rows if r["level"] == 2)
+    sales = [{"created_at": r["created_at"], "plan": r["plan"], "commission_cents": r["cents"],
+              "commission_status": r["status"], "nivel": "indicação" if r["level"] == 2 else "direta"} for r in rows]
     return {"code": af["code"], "name": af["name"], "pct": af["pct"],
             "link": aff_link(af["code"]), "coupon": af.get("coupon"),
+            "recruit_link": recruit_link(af["code"]), "subs": subs,
+            "give_pct": af.get("give_pct") if af.get("give_pct") is not None else DEFAULT_SUB_PCT,
             "liquid_wallet": af["liquid_wallet"], "usdt_wallet": af["usdt_wallet"],
             "pix_key": af.get("pix_key") or "", "payout_method": af.get("payout_method") or "pix",
             "btc_address": af.get("btc_address") or "", "ln_address": af.get("ln_address") or "",
-            "sales": rows,
-            "totals": {"count": len(rows), "pending_cents": pend, "paid_cents": paid}}
+            "sales": sales,
+            "totals": {"count": len(rows), "pending_cents": pend, "paid_cents": paid, "override_cents": over}}
 
 @app.post("/api/af/wallet")
 async def af_wallet(req: Request):
     af = af_from_req(req)
     d = await req.json()
-    method = (d.get("payout_method") or af.get("payout_method") or "pix").strip().lower()
-    if method not in ("pix", "liquid", "usdt", "btc", "lightning"):
-        method = "pix"
-    with contextlib.closing(db()) as con:
-        con.execute("""UPDATE affiliates SET liquid_wallet=?, usdt_wallet=?, pix_key=?,
-                       btc_address=?, ln_address=?, payout_method=? WHERE code=?""",
-                    ((d.get("liquid_wallet") or "").strip(),
-                     (d.get("usdt_wallet") or "").strip(),
-                     (d.get("pix_key") or "").strip(),
-                     (d.get("btc_address") or "").strip(),
-                     (d.get("ln_address") or "").strip(), method, af["code"]))
-        con.commit()
+    sets, vals = [], []                                    # atualiza só os campos enviados (não apaga o resto)
+    if "payout_method" in d:
+        m = (d.get("payout_method") or "pix").strip().lower()
+        if m not in ("pix", "liquid", "usdt", "btc", "lightning"):
+            m = "pix"
+        sets.append("payout_method=?"); vals.append(m)
+    for key in ("liquid_wallet", "usdt_wallet", "pix_key", "btc_address", "ln_address"):
+        if key in d:
+            sets.append(key + "=?"); vals.append((d.get(key) or "").strip())
+    if "give_pct" in d and str(d.get("give_pct")).strip() != "":
+        try:
+            sets.append("give_pct=?"); vals.append(max(0.0, min(40.0, float(d.get("give_pct")))))
+        except (TypeError, ValueError):
+            pass
+    if sets:
+        with contextlib.closing(db()) as con:
+            con.execute("UPDATE affiliates SET " + ", ".join(sets) + " WHERE code=?", vals + [af["code"]])
+            con.commit()
     return {"ok": True}
 
 # ------------------------------------------------------------------ admin (dono)
@@ -528,13 +585,16 @@ async def af_admin_overview(req: Request):
         affs = [dict(r) for r in con.execute("SELECT * FROM affiliates ORDER BY created_at DESC").fetchall()]
         out, tp, tpaid, ts = [], 0, 0, 0
         for a in affs:
-            rows = con.execute("SELECT commission_cents, commission_status FROM orders WHERE affiliate_code=? AND enrolled=1", (a["code"],)).fetchall()
-            pend = sum((r["commission_cents"] or 0) for r in rows if r["commission_status"] == "pending")
-            paid = sum((r["commission_cents"] or 0) for r in rows if r["commission_status"] == "paid")
+            rows = con.execute("SELECT cents, status FROM commissions WHERE affiliate_code=?", (a["code"],)).fetchall()
+            pend = sum((r["cents"] or 0) for r in rows if r["status"] == "pending")
+            paid = sum((r["cents"] or 0) for r in rows if r["status"] == "paid")
+            subs = con.execute("SELECT COUNT(*) n FROM affiliates WHERE parent_code=?", (a["code"],)).fetchone()["n"]
             tp += pend; tpaid += paid; ts += len(rows)
             out.append({"code": a["code"], "name": a["name"], "email": a["email"], "coupon": a.get("coupon"),
                         "payout_method": a.get("payout_method") or "pix", "pix_key": a.get("pix_key") or "",
                         "liquid_wallet": a.get("liquid_wallet") or "", "usdt_wallet": a.get("usdt_wallet") or "",
+                        "parent_code": a.get("parent_code") or "", "subs": subs,
+                        "give_pct": a.get("give_pct") if a.get("give_pct") is not None else DEFAULT_SUB_PCT,
                         "sales_count": len(rows), "pending_cents": pend, "paid_cents": paid})
     return {"totals": {"affiliates": len(affs), "sales": ts, "pending_cents": tp, "paid_cents": tpaid}, "affiliates": out}
 
@@ -543,10 +603,9 @@ async def af_admin_payouts(req: Request):
     require_admin(req)
     month = req.query_params.get("month") or ""
     with contextlib.closing(db()) as con:
-        rows = con.execute("""SELECT affiliate_code, SUM(commission_cents) cents, COUNT(*) n FROM orders
-                              WHERE commission_status='pending' AND enrolled=1
-                              AND (?='' OR substr(updated_at,1,7)=?) GROUP BY affiliate_code""",
-                           (month, month)).fetchall()
+        rows = con.execute("""SELECT affiliate_code, SUM(cents) cents, COUNT(*) n FROM commissions
+                              WHERE status='pending' AND (?='' OR substr(created_at,1,7)=?)
+                              GROUP BY affiliate_code""", (month, month)).fetchall()
     itens, total = [], 0
     for r in rows:
         a = get_affiliate(code=r["affiliate_code"])
@@ -566,12 +625,83 @@ async def af_admin_close(req: Request):
     month = (d.get("month") or "").strip()
     with contextlib.closing(db()) as con:
         if month:
-            con.execute("UPDATE orders SET commission_status='paid' WHERE commission_status='pending' AND substr(updated_at,1,7)=?", (month,))
+            con.execute("UPDATE commissions SET status='paid', updated_at=? WHERE status='pending' AND substr(created_at,1,7)=?", (now_iso(), month))
         else:
-            con.execute("UPDATE orders SET commission_status='paid' WHERE commission_status='pending'")
+            con.execute("UPDATE commissions SET status='paid', updated_at=? WHERE status='pending'", (now_iso(),))
         changes = con.total_changes
         con.commit()
     return {"ok": True, "pagos": changes}
+
+async def crypto_send(method, address, cents, idem, name):
+    """Chama o enviador externo do dono (ex.: BTC). Nunca move nada sem URL+chave configuradas."""
+    if method == "btc":
+        if not BTC_SEND_URL:
+            return {"ok": False, "error": "BTC_SEND_URL não configurada"}
+        body = {"method": "btc", "address": address, "amount_brl": round(cents / 100, 2),
+                "idempotency_key": idem, "affiliate": name, "reference": idem}
+        try:
+            async with httpx.AsyncClient(timeout=60) as c:
+                r = await c.post(BTC_SEND_URL, headers={"X-Api-Key": BTC_SEND_KEY, "Content-Type": "application/json"}, json=body)
+        except Exception as e:
+            return {"ok": False, "error": "conexão: " + str(e)[:120]}
+        if r.status_code in (200, 201):
+            try:
+                j = r.json()
+            except Exception:
+                j = {}
+            ok = bool(j.get("ok") or j.get("txid") or str(j.get("status", "")).lower() in ("sent", "ok", "paid"))
+            return {"ok": ok, "txid": j.get("txid") or j.get("tx"), "raw": j}
+        return {"ok": False, "error": "%s: %s" % (r.status_code, r.text[:140])}
+    return {"ok": False, "error": "método sem envio automático: " + method}
+
+@app.post("/api/af/admin/pay")
+async def af_admin_pay(req: Request):
+    require_admin(req)
+    d = await req.json()
+    month = (d.get("month") or "").strip()
+    confirm = bool(d.get("confirm"))
+    with contextlib.closing(db()) as con:
+        rows = con.execute("""SELECT affiliate_code, SUM(cents) cents, COUNT(*) n FROM commissions
+                              WHERE status='pending' AND (?='' OR substr(created_at,1,7)=?)
+                              GROUP BY affiliate_code""", (month, month)).fetchall()
+    itens = []
+    for r in rows:
+        a = get_affiliate(code=r["affiliate_code"])
+        if not a:
+            continue
+        method = a.get("payout_method") or "pix"
+        destino = _dest(a)
+        cents = r["cents"]
+        idem = "pay:%s:%s" % (month or "all", a["code"])
+        it = {"code": a["code"], "nome": a["name"], "metodo": method, "destino": destino,
+              "comissao_cents": cents, "vendas": r["n"]}
+        if not destino:
+            it["status"] = "sem_carteira"; itens.append(it); continue
+        if cents > PAYOUT_MAX_CENTS:
+            it["status"] = "acima_do_teto"; itens.append(it); continue
+        if not confirm:
+            it["status"] = "pronto"; itens.append(it); continue
+        if method == "btc":
+            with contextlib.closing(db()) as con:
+                prev = con.execute("SELECT status, txid FROM payouts WHERE idem_key=?", (idem,)).fetchone()
+            if prev and prev["status"] == "sent":
+                it["status"] = "ja_enviado"; it["txid"] = prev["txid"]; itens.append(it); continue
+            res = await crypto_send("btc", destino, cents, idem, a["name"])
+            st = "sent" if res.get("ok") else "falhou"
+            with contextlib.closing(db()) as con:
+                con.execute("""INSERT OR REPLACE INTO payouts(idem_key,affiliate_code,month,method,destino,cents,status,txid,created_at)
+                               VALUES(?,?,?,?,?,?,?,?,?)""",
+                            (idem, a["code"], month, method, destino, cents, st, res.get("txid"), now_iso()))
+                if st == "sent":
+                    con.execute("""UPDATE commissions SET status='paid', updated_at=? WHERE affiliate_code=?
+                                   AND status='pending' AND (?='' OR substr(created_at,1,7)=?)""",
+                                (now_iso(), a["code"], month, month))
+                con.commit()
+            it["status"] = st; it["txid"] = res.get("txid"); it["erro"] = res.get("error")
+        else:
+            it["status"] = "manual"
+        itens.append(it)
+    return {"mes": month or "todos", "confirm": confirm, "itens": itens}
 
 # ---- Poller do cartão (confirma via Changelly sem depender da callback) ----
 async def card_poller():
