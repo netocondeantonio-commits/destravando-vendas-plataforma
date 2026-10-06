@@ -139,6 +139,7 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
     <div class="tab" id="tabA" onclick="setTab('aff')">Afiliados</div>
     <div class="tab" id="tabP" onclick="setTab('pay')">Pagamentos</div>
     <div class="tab" id="tabC" onclick="setTab('cart')">Carrinhos</div>
+    <div class="tab" id="tabM" onclick="setTab('meta')">Metas</div>
   </div>
 
   <!-- Analytics -->
@@ -285,6 +286,32 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
     <div class="okmsg" id="cartOk"></div>
     <div class="err" id="cartErr"></div>
   </div>
+
+  <!-- Metas & missões -->
+  <div class="card hide" id="secM">
+    <div class="manual" style="background:#0c1a17;border-color:var(--teal2);color:var(--ink)">
+      <b>🏆 Metas & missões com bônus</b> — quando o afiliado bate a meta, o bônus é creditado <b>sozinho</b> e entra no pagamento do dia 05 junto com as comissões. Edite os valores como quiser.
+      <div class="formrow" style="margin-top:.6rem">
+        <select id="g_tipo">
+          <option value="vendas_mes">Vendas no mês (todo mês)</option>
+          <option value="vendas_total">Vendas no total (1x)</option>
+          <option value="indicados">Afiliados indicados (1x)</option>
+        </select>
+        <input id="g_titulo" placeholder="título (ex.: 10 vendas no mês)">
+        <input id="g_alvo" type="number" min="1" placeholder="alvo" style="flex:0 0 90px;min-width:90px">
+        <input id="g_bonus" type="number" min="0" step="0.01" placeholder="bônus R$" style="flex:0 0 110px;min-width:110px">
+        <input type="hidden" id="g_id">
+        <button class="btn" id="g_btn" onclick="saveGoal(this)">Salvar meta</button>
+      </div>
+      <div class="okmsg" id="gmOk"></div><div class="err" id="gmErr"></div>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>Tipo</th><th>Meta</th><th class="num">Alvo</th><th class="num">Bônus</th><th>Ativa</th><th>Ações</th></tr></thead>
+        <tbody id="goalRows"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -292,6 +319,8 @@ var KEY=null;try{KEY=localStorage.getItem('af_admin_key');}catch(e){}
 var AFF=[];            // lista de afiliados do overview
 var SORT='desc';       // ordenação por "a receber"
 var CARTS=[],STU=[],CARTS_LOADED=false,STU_LOADED=false;
+var GOALS=[],GOALS_LOADED=false;
+var GTIPO={vendas_mes:'Vendas no mês',vendas_total:'Vendas no total',indicados:'Indicados',manual:'Manual'};
 var PLAN_OPTS=[['pro','Pro'],['starter','Starter'],['premium','Premium'],['afiliado','Afiliado Express'],['ponto','Ponto de Coleta']];
 
 function money(c){return ((c||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2});}
@@ -347,13 +376,14 @@ function adminFetch(url,opts){
 
 // ---- abas ----
 function setTab(t){
-  var tabs={an:'tabAn',stu:'tabS',aff:'tabA',pay:'tabP',cart:'tabC'};
-  var secs={an:'secAn',stu:'secS',aff:'secA',pay:'secP',cart:'secC'};
+  var tabs={an:'tabAn',stu:'tabS',aff:'tabA',pay:'tabP',cart:'tabC',meta:'tabM'};
+  var secs={an:'secAn',stu:'secS',aff:'secA',pay:'secP',cart:'secC',meta:'secM'};
   for(var k in tabs)document.getElementById(tabs[k]).classList.toggle('sel',k===t);
   for(var s in secs)document.getElementById(secs[s]).classList.toggle('hide',s!==t);
   if(t==='pay'&&!document.getElementById('month').value){document.getElementById('month').value=curMonth();loadPayouts();}
   if(t==='stu'&&!STU_LOADED)loadStudents();
   if(t==='cart'&&!CARTS_LOADED)loadCarts();
+  if(t==='meta'&&!GOALS_LOADED)loadGoals();
 }
 
 // ---- overview ----
@@ -630,6 +660,42 @@ function emailAll(btn){
      document.getElementById('cartOk').textContent='✓ '+r.enviados+' de '+r.total+' e-mails enviados.';
    }).catch(function(e){btn.textContent=t;btn.disabled=false;if(e&&e.handled)return;document.getElementById('cartErr').textContent=(e&&e.detail)||'Erro ao enviar.';});
 }
+// ---- metas & missões ----
+function loadGoals(){
+  GOALS_LOADED=true;document.getElementById('gmErr').textContent='';
+  document.getElementById('goalRows').innerHTML='<tr><td colspan="6" class="empty">Carregando…</td></tr>';
+  adminFetch('/api/af/admin/goals').then(function(d){GOALS=d.metas||[];renderGoals();})
+   .catch(function(e){if(e&&e.handled)return;document.getElementById('gmErr').textContent=(e&&e.detail)||'Erro ao carregar metas.';document.getElementById('goalRows').innerHTML='<tr><td colspan="6" class="empty">Não foi possível carregar.</td></tr>';});
+}
+function renderGoals(){
+  var tb=document.getElementById('goalRows');
+  if(!GOALS.length){tb.innerHTML='<tr><td colspan="6" class="empty">Nenhuma meta ainda. Crie a primeira acima.</td></tr>';return;}
+  tb.innerHTML=GOALS.map(function(g,i){
+    return '<tr'+(g.active?'':' style="opacity:.5"')+'>'+
+      '<td>'+esc(GTIPO[g.tipo]||g.tipo)+'</td>'+
+      '<td class="name">'+esc(g.titulo||'—')+'</td>'+
+      '<td class="num">'+(g.vendas||0)+'</td>'+
+      '<td class="num rec">'+money(g.bonus_cents)+'</td>'+
+      '<td>'+(g.active?'sim':'não')+'</td>'+
+      '<td><div class="rowbtn"><button class="minibtn" onclick="editGoal('+i+')">Editar</button>'+
+        '<button class="minibtn" onclick="toggleGoal('+i+')">'+(g.active?'Desativar':'Ativar')+'</button>'+
+        '<button class="minibtn go" onclick="delGoal('+i+')">Excluir</button></div></td>'+
+    '</tr>';
+  }).join('');
+}
+function editGoal(i){var g=GOALS[i];document.getElementById('g_id').value=g.id;document.getElementById('g_tipo').value=g.tipo;document.getElementById('g_titulo').value=g.titulo||'';document.getElementById('g_alvo').value=g.vendas||'';document.getElementById('g_bonus').value=((g.bonus_cents||0)/100).toFixed(2);document.getElementById('g_titulo').focus();}
+function saveGoal(btn){
+  var body={tipo:document.getElementById('g_tipo').value,titulo:document.getElementById('g_titulo').value.trim(),vendas:document.getElementById('g_alvo').value,bonus_reais:document.getElementById('g_bonus').value||0};
+  var id=document.getElementById('g_id').value;if(id)body.id=parseInt(id,10);
+  document.getElementById('gmOk').textContent='';document.getElementById('gmErr').textContent='';
+  if(!body.titulo||!body.vendas){document.getElementById('gmErr').textContent='Preencha o título e o alvo.';return;}
+  var t=btn.textContent;btn.disabled=true;btn.textContent='Salvando…';
+  adminFetch('/api/af/admin/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+   .then(function(){document.getElementById('gmOk').textContent='✓ Meta salva.';['g_id','g_titulo','g_alvo','g_bonus'].forEach(function(x){document.getElementById(x).value='';});btn.textContent=t;btn.disabled=false;loadGoals();})
+   .catch(function(e){btn.textContent=t;btn.disabled=false;if(e&&e.handled)return;document.getElementById('gmErr').textContent=(e&&e.detail)||'Erro ao salvar.';});
+}
+function toggleGoal(i){var g=GOALS[i];adminFetch('/api/af/admin/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:g.id,tipo:g.tipo,titulo:g.titulo,vendas:g.vendas,bonus_cents:g.bonus_cents,active:!g.active})}).then(loadGoals).catch(function(){});}
+function delGoal(i){var g=GOALS[i];if(!confirm('Excluir a meta "'+(g.titulo||'')+'"?'))return;adminFetch('/api/af/admin/goals/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:g.id})}).then(loadGoals).catch(function(){});}
 // ---- export CSV ----
 function exportCsv(what){window.open('/api/af/admin/export?what='+encodeURIComponent(what)+'&key='+encodeURIComponent(KEY||''),'_blank');}
 

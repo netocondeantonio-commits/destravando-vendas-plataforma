@@ -38,6 +38,14 @@ th{color:var(--mut);font-weight:600}
 .pill.pg{background:#0f2a22;color:var(--teal)}
 .note{color:var(--mut);font-size:.8rem;margin-top:.5rem}
 .okmsg{color:var(--teal);font-size:.85rem;margin-top:.4rem;min-height:1em}
+.mrow{display:flex;align-items:center;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:0}
+.mrow .mi{flex:1;min-width:0}
+.mrow .mt{font-size:.9rem}
+.mbar{height:7px;background:#071512;border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-top:.35rem}
+.mbar>div{height:100%;background:linear-gradient(90deg,#15d6b6,#0e8c7f)}
+.mb{font-size:.78rem;color:var(--teal);font-weight:700;white-space:nowrap}
+.mdone{color:#04211d;background:var(--teal);border-radius:999px;font-size:.72rem;padding:.14rem .55rem;font-weight:800;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -83,6 +91,16 @@ th{color:var(--mut);font-weight:600}
   </div>
 
   <div class="card">
+    <h2>🏆 Missões & metas (bônus)</h2>
+    <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:.6rem">
+      <div class="stat"><div class="n g" id="m_vm">0</div><div class="l">vendas no mês</div></div>
+      <div class="stat"><div class="n g" id="m_bonus">R$ 0,00</div><div class="l">bônus no mês</div></div>
+    </div>
+    <div id="m_list"><div class="lbl">—</div></div>
+    <div class="note">Bata a meta e o <b>bônus cai junto com sua comissão no dia 05</b>. 🚀</div>
+  </div>
+
+  <div class="card">
     <h2>Como você quer receber</h2>
     <label>Método de pagamento</label>
     <select class="w" id="method">
@@ -112,6 +130,7 @@ th{color:var(--mut);font-weight:600}
 var TOKEN=null;try{TOKEN=localStorage.getItem('af_token');}catch(e){}
 if(!TOKEN){location.href='/afiliados';}
 function money(c){return 'R$ '+((c||0)/100).toFixed(2).replace('.',',');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function logout(){try{localStorage.removeItem('af_token');localStorage.removeItem('af_code');}catch(e){}location.href='/afiliados';}
 function copyLink(b){var i=document.getElementById('link');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
 function copyCoupon(b){var i=document.getElementById('coupon');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
@@ -126,6 +145,16 @@ function load(){
     document.getElementById('st_subs').textContent=d.subs||0;
     document.getElementById('st_over').textContent=money((d.totals&&d.totals.override_cents)||0);
     document.getElementById('give').value=(d.give_pct!=null?d.give_pct:15);
+    var M=d.metas||{};
+    document.getElementById('m_vm').textContent=M.vendas_mes||0;
+    document.getElementById('m_bonus').textContent=money(M.bonus_mes_cents);
+    var ml=document.getElementById('m_list');var ms=M.missoes||[];
+    if(!ms.length){ml.innerHTML='<div class="lbl">Nenhuma meta ativa no momento.</div>';}
+    else{ml.innerHTML=ms.map(function(x){
+      var pct=x.alvo>0?Math.min(100,Math.round((x.progresso||0)/x.alvo*100)):0;
+      var right=x.atingida?('<span class="mdone">✓ '+money(x.bonus_cents)+'</span>'):('<span class="mb">'+money(x.bonus_cents)+'</span>');
+      return '<div class="mrow"><div class="mi"><div class="mt">'+esc(x.titulo)+' <span class="lbl">('+(x.progresso||0)+'/'+x.alvo+')</span></div><div class="mbar"><div style="width:'+pct+'%"></div></div></div>'+right+'</div>';
+    }).join('');}
     document.getElementById('st_count').textContent=d.totals.count;
     document.getElementById('st_pend').textContent=money(d.totals.pending_cents);
     document.getElementById('st_paid').textContent=money(d.totals.paid_cents);

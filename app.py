@@ -94,6 +94,10 @@ def init_db():
             created_at TEXT, updated_at TEXT);
         CREATE INDEX IF NOT EXISTS idx_comm_af ON commissions(affiliate_code);
         CREATE INDEX IF NOT EXISTS idx_comm_order ON commissions(order_id);
+        CREATE TABLE IF NOT EXISTS goals(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT DEFAULT 'vendas_mes',
+            titulo TEXT, vendas INTEGER, bonus_cents INTEGER,
+            active INTEGER DEFAULT 1, created_at TEXT);
         """)
         # colunas de afiliado nos pedidos (idempotente)
         for col, ddl in (("affiliate_code", "TEXT"),
@@ -115,7 +119,20 @@ def init_db():
                 con.execute(f"ALTER TABLE affiliates ADD COLUMN {acol} {addl}")
             except sqlite3.OperationalError:
                 pass
+        try:
+            con.execute("ALTER TABLE commissions ADD COLUMN note TEXT")   # identifica o bônus de meta (idempotência)
+        except sqlite3.OperationalError:
+            pass
         con.execute("CREATE INDEX IF NOT EXISTS idx_af_code ON orders(affiliate_code)")
+        if not con.execute("SELECT 1 FROM goals LIMIT 1").fetchone():      # metas/missões de exemplo (o dono edita)
+            seed = (("vendas_mes", "5 vendas no mês", 5, 5000),
+                    ("vendas_mes", "10 vendas no mês", 10, 15000),
+                    ("vendas_mes", "25 vendas no mês", 25, 50000),
+                    ("vendas_total", "Primeira venda 🎉", 1, 2000),
+                    ("indicados", "Recrute 3 afiliados", 3, 10000))
+            for tipo, titulo, v, b in seed:
+                con.execute("INSERT INTO goals(tipo,titulo,vendas,bonus_cents,active,created_at) VALUES(?,?,?,?,1,?)",
+                            (tipo, titulo, v, b, now_iso()))
         con.commit()
 
 def now_iso(): return datetime.now(timezone.utc).isoformat()
@@ -175,6 +192,41 @@ def _fee_cents(method, amount_cents):
         return round(amount_cents * 0.05) + 200   # Cobrix: 5% + R$2
     return round(amount_cents * 0.09)              # cartão (Changelly ~9%)
 
+def _insert_bonus(con, code, cents, note, now):
+    """Credita um bônus (level 3) uma única vez por 'note' (idempotente)."""
+    if not cents or cents <= 0:
+        return
+    if con.execute("SELECT 1 FROM commissions WHERE affiliate_code=? AND level=3 AND note=?", (code, note)).fetchone():
+        return
+    con.execute("""INSERT INTO commissions(order_id,affiliate_code,level,cents,status,note,created_at,updated_at)
+                   VALUES('',?,3,?,'pending',?,?,?)""", (code, cents, note, now, now))
+
+def _credit_goal_bonuses(con, code, now):
+    """Credita bônus das metas/missões que o afiliado bateu (level 3). Idempotente."""
+    if not code:
+        return
+    ym = now[:7]
+    goals = con.execute("SELECT id,tipo,vendas,bonus_cents FROM goals WHERE active=1").fetchall()
+    cache = {}
+    def n(key, sql, *a):
+        if key not in cache:
+            cache[key] = con.execute(sql, a).fetchone()[0]
+        return cache[key]
+    for g in goals:
+        tipo = g["tipo"] or "vendas_mes"; alvo = g["vendas"] or 0; bonus = g["bonus_cents"] or 0
+        if alvo <= 0 or bonus <= 0:
+            continue
+        if tipo == "vendas_mes":
+            if n("vm", "SELECT COUNT(*) FROM orders WHERE enrolled=1 AND method!='cortesia' AND affiliate_code=? AND substr(COALESCE(updated_at,created_at),1,7)=?", code, ym) >= alvo:
+                _insert_bonus(con, code, bonus, "g%d:%s" % (g["id"], ym), now)
+        elif tipo == "vendas_total":
+            if n("vt", "SELECT COUNT(*) FROM orders WHERE enrolled=1 AND method!='cortesia' AND affiliate_code=?", code) >= alvo:
+                _insert_bonus(con, code, bonus, "g%d" % g["id"], now)
+        elif tipo == "indicados":
+            if n("ind", "SELECT COUNT(*) FROM affiliates WHERE parent_code=?", code) >= alvo:
+                _insert_bonus(con, code, bonus, "g%d" % g["id"], now)
+        # 'manual' = o dono credita pelo painel, não automático
+
 def credit_commission(order_id):
     o = find_order(order_id=order_id)
     if not o or not o.get("affiliate_code"):
@@ -211,6 +263,7 @@ def credit_commission(order_id):
             con.execute("""INSERT INTO commissions(order_id,affiliate_code,level,cents,status,created_at,updated_at)
                            VALUES(?,?,?,?,?,?,?)""", (order_id, code, lvl, cents, "pending", now_iso(), now_iso()))
         con.execute("UPDATE orders SET commission_cents=?, commission_status='pending' WHERE order_id=?", (direct, order_id))
+        _credit_goal_bonuses(con, o["affiliate_code"], now_iso())   # metas de venda do afiliado
         con.commit()
 
 def save_order(o):
@@ -500,6 +553,8 @@ async def af_signup(req: Request):
                     (code, name, email, ph, salt,
                      (d.get("liquid_wallet") or "").strip(),
                      (d.get("usdt_wallet") or "").strip(), 20, coupon, parent_code, token, now_iso()))
+        if parent_code:
+            _credit_goal_bonuses(con, parent_code, now_iso())       # missão "recrute N afiliados" do mestre
         con.commit()
     return {"code": code, "token": token, "link": aff_link(code), "coupon": coupon}
 
@@ -516,17 +571,34 @@ async def af_login(req: Request):
 @app.get("/api/af/me")
 async def af_me(req: Request):
     af = af_from_req(req)
+    ym = datetime.now(timezone.utc).strftime("%Y-%m")
     with contextlib.closing(db()) as con:
         rows = [dict(r) for r in con.execute(
-            """SELECT c.created_at, c.level, c.cents, c.status, o.plan
-               FROM commissions c JOIN orders o ON o.order_id=c.order_id
+            """SELECT c.created_at, c.level, c.cents, c.status, c.note, o.plan
+               FROM commissions c LEFT JOIN orders o ON o.order_id=c.order_id
                WHERE c.affiliate_code=? ORDER BY c.created_at DESC""", (af["code"],)).fetchall()]
         subs = con.execute("SELECT COUNT(*) n FROM affiliates WHERE parent_code=?", (af["code"],)).fetchone()["n"]
+        vm = con.execute("SELECT COUNT(*) n FROM orders WHERE enrolled=1 AND method!='cortesia' AND affiliate_code=? AND substr(COALESCE(updated_at,created_at),1,7)=?", (af["code"], ym)).fetchone()["n"]
+        vt = con.execute("SELECT COUNT(*) n FROM orders WHERE enrolled=1 AND method!='cortesia' AND affiliate_code=?", (af["code"],)).fetchone()["n"]
+        goals = [dict(r) for r in con.execute("SELECT id,tipo,titulo,vendas,bonus_cents FROM goals WHERE active=1 ORDER BY tipo DESC, vendas").fetchall()]
+    done = set(r["note"] for r in rows if r["level"] == 3 and r.get("note"))
     pend = sum(r["cents"] for r in rows if r["status"] == "pending")
     paid = sum(r["cents"] for r in rows if r["status"] == "paid")
     over = sum(r["cents"] for r in rows if r["level"] == 2)
-    sales = [{"created_at": r["created_at"], "plan": r["plan"], "commission_cents": r["cents"],
-              "commission_status": r["status"], "nivel": "indicação" if r["level"] == 2 else "direta"} for r in rows]
+    bonus_mes = sum(r["cents"] for r in rows if r["level"] == 3 and (r["created_at"] or "")[:7] == ym)
+    def _niv(l): return "bônus" if l == 3 else ("indicação" if l == 2 else "direta")
+    sales = [{"created_at": r["created_at"],
+              "plan": (r["plan"] or ("🎁 Bônus de meta" if r["level"] == 3 else "")),
+              "commission_cents": r["cents"], "commission_status": r["status"], "nivel": _niv(r["level"])} for r in rows]
+    missoes = []
+    for g in goals:
+        tipo = g["tipo"] or "vendas_mes"; alvo = g["vendas"] or 0
+        if tipo == "vendas_mes": prog = vm; note = "g%d:%s" % (g["id"], ym)
+        elif tipo == "vendas_total": prog = vt; note = "g%d" % g["id"]
+        elif tipo == "indicados": prog = subs; note = "g%d" % g["id"]
+        else: prog = 0; note = "g%d" % g["id"]
+        missoes.append({"titulo": g["titulo"] or "", "tipo": tipo, "alvo": alvo,
+                        "bonus_cents": g["bonus_cents"], "progresso": prog, "atingida": note in done})
     return {"code": af["code"], "name": af["name"], "pct": af["pct"],
             "link": aff_link(af["code"]), "coupon": af.get("coupon"),
             "recruit_link": recruit_link(af["code"]), "subs": subs,
@@ -535,6 +607,7 @@ async def af_me(req: Request):
             "pix_key": af.get("pix_key") or "", "payout_method": af.get("payout_method") or "pix",
             "btc_address": af.get("btc_address") or "", "ln_address": af.get("ln_address") or "",
             "sales": sales,
+            "metas": {"vendas_mes": vm, "vendas_total": vt, "bonus_mes_cents": bonus_mes, "missoes": missoes},
             "totals": {"count": len(rows), "pending_cents": pend, "paid_cents": paid, "override_cents": over}}
 
 @app.post("/api/af/wallet")
@@ -804,6 +877,57 @@ async def af_admin_cart_email(req: Request):
             sent += 1
         results.append({"order_id": oid, "email": email, "ok": res.get("ok"), "error": res.get("error")})
     return {"enviados": sent, "total": len(oids), "configurado": bool(RESEND_API_KEY), "resultados": results}
+
+@app.get("/api/af/admin/goals")
+async def af_admin_goals(req: Request):
+    require_admin(req)
+    with contextlib.closing(db()) as con:
+        rows = [dict(r) for r in con.execute(
+            "SELECT id,tipo,titulo,vendas,bonus_cents,active FROM goals ORDER BY active DESC, tipo DESC, vendas").fetchall()]
+    return {"metas": rows}
+
+@app.post("/api/af/admin/goals")
+async def af_admin_goals_save(req: Request):
+    require_admin(req)
+    d = await req.json()
+    tipo = (d.get("tipo") or "vendas_mes").strip()
+    if tipo not in ("vendas_mes", "vendas_total", "indicados", "manual"):
+        tipo = "vendas_mes"
+    titulo = (d.get("titulo") or "").strip()
+    try:
+        alvo = int(d.get("vendas") or 0)
+    except (TypeError, ValueError):
+        alvo = 0
+    try:
+        if d.get("bonus_reais") is not None:
+            bonus = int(round(float(d.get("bonus_reais")) * 100))
+        else:
+            bonus = int(d.get("bonus_cents") or 0)
+    except (TypeError, ValueError):
+        bonus = 0
+    active = 1 if d.get("active", True) else 0
+    gid = d.get("id")
+    with contextlib.closing(db()) as con:
+        if gid:
+            con.execute("UPDATE goals SET tipo=?, titulo=?, vendas=?, bonus_cents=?, active=? WHERE id=?",
+                        (tipo, titulo, alvo, bonus, active, gid))
+        else:
+            con.execute("INSERT INTO goals(tipo,titulo,vendas,bonus_cents,active,created_at) VALUES(?,?,?,?,?,?)",
+                        (tipo, titulo, alvo, bonus, active, now_iso()))
+        con.commit()
+    return {"ok": True}
+
+@app.post("/api/af/admin/goals/delete")
+async def af_admin_goals_delete(req: Request):
+    require_admin(req)
+    d = await req.json()
+    gid = d.get("id")
+    if not gid:
+        raise HTTPException(400, "id obrigatório")
+    with contextlib.closing(db()) as con:
+        con.execute("DELETE FROM goals WHERE id=?", (gid,))
+        con.commit()
+    return {"ok": True}
 
 @app.get("/api/af/admin/payouts")
 async def af_admin_payouts(req: Request):
