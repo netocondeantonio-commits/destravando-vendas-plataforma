@@ -598,6 +598,157 @@ async def af_admin_overview(req: Request):
                         "sales_count": len(rows), "pending_cents": pend, "paid_cents": paid})
     return {"totals": {"affiliates": len(affs), "sales": ts, "pending_cents": tp, "paid_cents": tpaid}, "affiliates": out}
 
+@app.get("/api/af/admin/analytics")
+async def af_admin_analytics(req: Request):
+    require_admin(req)
+    ym = datetime.now(timezone.utc).strftime("%Y-%m")        # mês corrente (UTC)
+    with contextlib.closing(db()) as con:
+        def scalar(q, *a):
+            r = con.execute(q, a).fetchone()
+            return (r[0] if r else 0) or 0
+        PAID = "enrolled=1 AND method!='cortesia'"            # venda paga de verdade (exclui cortesia)
+        fat_total = scalar("SELECT SUM(amount_cents) FROM orders WHERE " + PAID)
+        fat_mes   = scalar("SELECT SUM(amount_cents) FROM orders WHERE " + PAID + " AND substr(COALESCE(updated_at,created_at),1,7)=?", ym)
+        vendas    = scalar("SELECT COUNT(*) FROM orders WHERE " + PAID)
+        vendas_mes= scalar("SELECT COUNT(*) FROM orders WHERE " + PAID + " AND substr(COALESCE(updated_at,created_at),1,7)=?", ym)
+        checkouts = scalar("SELECT COUNT(*) FROM orders WHERE method!='cortesia'")
+        abn       = scalar("SELECT COUNT(*) FROM orders WHERE enrolled=0 AND status!='paid'")
+        abn_cents = scalar("SELECT SUM(amount_cents) FROM orders WHERE enrolled=0 AND status!='paid'")
+        por_plano = [dict(r) for r in con.execute(
+            "SELECT plan, COUNT(*) vendas, COALESCE(SUM(amount_cents),0) cents FROM orders WHERE " + PAID + " GROUP BY plan ORDER BY cents DESC")]
+        por_metodo = [dict(r) for r in con.execute(
+            """SELECT method,
+                      SUM(CASE WHEN enrolled=1 THEN 1 ELSE 0 END) pagos,
+                      SUM(CASE WHEN enrolled=0 AND status!='paid' THEN 1 ELSE 0 END) abandonados
+               FROM orders WHERE method!='cortesia' GROUP BY method""")]
+        serie = [dict(r) for r in con.execute(
+            "SELECT substr(COALESCE(updated_at,created_at),1,10) dia, COUNT(*) vendas, COALESCE(SUM(amount_cents),0) cents FROM orders WHERE " + PAID + " GROUP BY dia ORDER BY dia DESC LIMIT 14")]
+    conv = round(vendas * 100.0 / checkouts, 1) if checkouts else 0.0
+    ticket = round(fat_total / vendas) if vendas else 0
+    return {"mes": ym,
+            "kpi": {"fat_total_cents": fat_total, "fat_mes_cents": fat_mes,
+                    "vendas": vendas, "vendas_mes": vendas_mes, "checkouts": checkouts,
+                    "conversao": conv, "ticket_cents": ticket,
+                    "abandonados": abn, "abandonados_cents": abn_cents},
+            "por_plano": por_plano, "por_metodo": por_metodo,
+            "serie": list(reversed(serie))}
+
+@app.get("/api/af/admin/carts")
+async def af_admin_carts(req: Request):
+    require_admin(req)
+    with contextlib.closing(db()) as con:
+        rows = [dict(r) for r in con.execute(
+            """SELECT order_id, plan, email, name, amount_cents, method, status, affiliate_code,
+                      created_at, COALESCE(updated_at,created_at) quando
+               FROM orders WHERE enrolled=0 AND status!='paid'
+               ORDER BY created_at DESC LIMIT 200""")]
+    carrinhos = []
+    for r in rows:
+        plan = r["plan"] or ""
+        label = PLANS.get(plan, {}).get("label", plan)
+        link = PUBLIC_BASE + "/comprar?plano=" + plan
+        if r.get("affiliate_code"):
+            link += "&ref=" + r["affiliate_code"]
+        nome1 = (r["name"] or "").strip().split(" ")[0]
+        ola = ("Oi " + nome1) if nome1 else "Oi"
+        msg = (ola + "! Vi que você começou a garantir o curso *" + label + "* e não finalizou. "
+               "Ainda dá tempo — e com o cupom *NETO10* você ganha 10% de desconto no Pix. "
+               "É só terminar por aqui: " + link)
+        carrinhos.append({"order_id": r["order_id"], "email": r["email"], "name": r["name"] or "",
+                          "plan": plan, "plan_label": label, "amount_cents": r["amount_cents"],
+                          "method": r["method"], "status": r["status"],
+                          "created_at": r["created_at"], "quando": r["quando"],
+                          "affiliate_code": r.get("affiliate_code") or "",
+                          "recovery_link": link, "whatsapp_msg": msg})
+    total_cents = sum((x["amount_cents"] or 0) for x in carrinhos)
+    return {"total": len(carrinhos), "total_cents": total_cents, "carrinhos": carrinhos}
+
+@app.get("/api/af/admin/students")
+async def af_admin_students(req: Request):
+    require_admin(req)
+    q = (req.query_params.get("q") or "").strip().lower()
+    with contextlib.closing(db()) as con:
+        rows = [dict(r) for r in con.execute(
+            """SELECT order_id, plan, email, name, amount_cents, method, affiliate_code, bump,
+                      COALESCE(updated_at,created_at) quando
+               FROM orders WHERE enrolled=1 ORDER BY quando DESC LIMIT 500""")]
+    out = []
+    for r in rows:
+        if q and q not in (r["email"] or "").lower() and q not in (r["name"] or "").lower() and q not in (r["plan"] or "").lower():
+            continue
+        out.append({"order_id": r["order_id"], "email": r["email"], "name": r["name"] or "",
+                    "plan": r["plan"], "plan_label": PLANS.get(r["plan"], {}).get("label", r["plan"]),
+                    "amount_cents": r["amount_cents"], "method": r["method"],
+                    "affiliate_code": r.get("affiliate_code") or "", "bump": r.get("bump") or "",
+                    "quando": r["quando"]})
+    return {"total": len(out), "alunos": out}
+
+@app.post("/api/af/admin/reenroll")
+async def af_admin_reenroll(req: Request):
+    require_admin(req)
+    d = await req.json()
+    o = find_order(order_id=(d.get("order_id") or "").strip())
+    if not o:
+        raise HTTPException(404, "pedido não encontrado")
+    try:
+        await do_enroll(o)
+    except Exception as e:
+        raise HTTPException(502, "falha ao matricular: " + str(e)[:160])
+    return {"ok": True, "email": o["email"], "plan": o["plan"]}
+
+@app.post("/api/af/admin/grant")
+async def af_admin_grant(req: Request):
+    require_admin(req)
+    d = await req.json()
+    email = (d.get("email") or "").strip().lower()
+    plan = (d.get("plan") or "").strip()
+    name = (d.get("name") or "").strip()
+    if "@" not in email or plan not in PLANS:
+        raise HTTPException(400, "informe um e-mail válido e um plano existente")
+    oid = "CORT-" + secrets.token_hex(6)
+    save_order({"order_id": oid, "method": "cortesia", "plan": plan, "email": email,
+                "name": name, "amount_cents": 0, "provider_ref": None,
+                "affiliate_code": None, "bump": ""})
+    try:
+        await do_enroll(find_order(order_id=oid))
+    except Exception as e:
+        raise HTTPException(502, "acesso registrado, mas a matrícula falhou: " + str(e)[:160])
+    return {"ok": True, "email": email, "plan": plan, "course": PLANS[plan].get("course")}
+
+@app.get("/api/af/admin/export")
+async def af_admin_export(req: Request):
+    require_admin(req)
+    from starlette.responses import PlainTextResponse
+    import csv, io
+    what = (req.query_params.get("what") or "sales").strip()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    with contextlib.closing(db()) as con:
+        if what == "affiliates":
+            w.writerow(["codigo", "nome", "email", "cupom", "indicado_por", "metodo", "destino", "criado"])
+            for a in con.execute("SELECT * FROM affiliates ORDER BY created_at"):
+                a = dict(a)
+                dest = a.get("pix_key") or a.get("liquid_wallet") or a.get("usdt_wallet") or a.get("btc_address") or a.get("ln_address") or ""
+                w.writerow([a["code"], a["name"], a["email"], a.get("coupon") or "", a.get("parent_code") or "",
+                            a.get("payout_method") or "pix", dest, a.get("created_at") or ""])
+            fname = "afiliados.csv"
+        elif what == "carts":
+            w.writerow(["quando", "nome", "email", "plano", "valor_reais", "metodo", "status"])
+            for r in con.execute("SELECT * FROM orders WHERE enrolled=0 AND status!='paid' ORDER BY created_at DESC"):
+                r = dict(r)
+                w.writerow([(r.get("created_at") or "")[:16], r.get("name") or "", r["email"], r["plan"],
+                            "%.2f" % ((r["amount_cents"] or 0) / 100), r["method"], r["status"]])
+            fname = "carrinhos.csv"
+        else:
+            w.writerow(["quando", "nome", "email", "plano", "valor_reais", "metodo", "afiliado", "order_id"])
+            for r in con.execute("SELECT * FROM orders WHERE enrolled=1 AND method!='cortesia' ORDER BY COALESCE(updated_at,created_at) DESC"):
+                r = dict(r)
+                w.writerow([(r.get("updated_at") or r.get("created_at") or "")[:16], r.get("name") or "", r["email"], r["plan"],
+                            "%.2f" % ((r["amount_cents"] or 0) / 100), r["method"], r.get("affiliate_code") or "", r["order_id"]])
+            fname = "vendas.csv"
+    return PlainTextResponse(buf.getvalue(), media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="%s"' % fname})
+
 @app.get("/api/af/admin/payouts")
 async def af_admin_payouts(req: Request):
     require_admin(req)

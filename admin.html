@@ -25,8 +25,8 @@ h2{font-size:1rem;margin:0 0 .7rem}
 .stat .n.g{color:var(--teal)}
 .stat .n.y{color:#f3d57a}
 .stat .l{color:var(--mut);font-size:.75rem;margin-top:.25rem}
-.tabs{display:flex;gap:.4rem;margin-bottom:1rem;background:#071512;border:1px solid var(--line);border-radius:12px;padding:.25rem;max-width:380px}
-.tab{flex:1;text-align:center;padding:.55rem;border-radius:9px;cursor:pointer;font-weight:700;color:var(--mut);font-size:.9rem}
+.tabs{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem;background:#071512;border:1px solid var(--line);border-radius:12px;padding:.25rem;max-width:660px}
+.tab{flex:1 1 92px;min-width:92px;text-align:center;padding:.55rem;border-radius:9px;cursor:pointer;font-weight:700;color:var(--mut);font-size:.9rem}
 .tab.sel{background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d}
 .toolbar{display:flex;gap:.6rem;align-items:center;margin-bottom:.9rem;flex-wrap:wrap}
 input.w,input.month{padding:.65rem .7rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.95rem}
@@ -70,6 +70,21 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
 #gate input:focus{outline:none;border-color:var(--teal)}
 #gate .btn{width:100%;margin-top:1.1rem}
 .hide{display:none!important}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+.chart{display:flex;align-items:flex-end;gap:6px;height:128px;padding:.5rem .2rem .2rem;overflow-x:auto}
+.bar{flex:1 0 20px;min-width:20px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.bar .bv{width:100%;background:linear-gradient(180deg,#15d6b6,#0e8c7f);border-radius:5px 5px 0 0;min-height:2px}
+.bar .bd{font-size:.62rem;color:var(--mut);white-space:nowrap}
+.bar .bn{font-size:.62rem;color:var(--teal);font-weight:700}
+.rowbtn{display:flex;gap:.4rem;flex-wrap:wrap}
+.minibtn{padding:.42rem .6rem;border:1px solid var(--teal2);background:#071512;color:var(--ink);border-radius:8px;cursor:pointer;font-size:.76rem;font-weight:700;white-space:nowrap}
+.minibtn:hover{background:#0c221d}
+.minibtn.go{border-color:#4a3c10;color:#f3d57a}
+.age{color:#f3d57a;font-size:.72rem}
+.formrow{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem}
+.formrow select,.formrow input{padding:.6rem .65rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.9rem}
+.formrow input{flex:1;min-width:160px}
 </style>
 </head>
 <body>
@@ -101,21 +116,90 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
   </div>
 
   <div class="stats">
-    <div class="stat"><div class="n" id="t_aff">—</div><div class="l">afiliados</div></div>
-    <div class="stat"><div class="n" id="t_sales">—</div><div class="l">vendas</div></div>
-    <div class="stat"><div class="n y" id="t_pend">—</div><div class="l">comissão a pagar</div></div>
-    <div class="stat"><div class="n g" id="t_paid">—</div><div class="l">já paga</div></div>
+    <div class="stat"><div class="n g" id="k_fat">—</div><div class="l">faturamento no mês</div></div>
+    <div class="stat"><div class="n" id="k_vendas">—</div><div class="l">vendas no mês</div></div>
+    <div class="stat"><div class="n" id="k_conv">—</div><div class="l">conversão</div></div>
+    <div class="stat"><div class="n y" id="k_aband">—</div><div class="l">carrinhos abandonados</div></div>
   </div>
 
   <div class="tabs">
-    <div class="tab sel" id="tabA" onclick="setTab('aff')">Afiliados</div>
-    <div class="tab" id="tabP" onclick="setTab('pay')">Pagamentos do mês</div>
+    <div class="tab sel" id="tabAn" onclick="setTab('an')">Analytics</div>
+    <div class="tab" id="tabS" onclick="setTab('stu')">Alunos</div>
+    <div class="tab" id="tabA" onclick="setTab('aff')">Afiliados</div>
+    <div class="tab" id="tabP" onclick="setTab('pay')">Pagamentos</div>
+    <div class="tab" id="tabC" onclick="setTab('cart')">Carrinhos</div>
+  </div>
+
+  <!-- Analytics -->
+  <div class="card" id="secAn">
+    <div class="grid2">
+      <div>
+        <h2>Faturamento</h2>
+        <div class="stats" style="margin-bottom:0">
+          <div class="stat"><div class="n g" id="a_fatt">—</div><div class="l">total recebido</div></div>
+          <div class="stat"><div class="n" id="a_ticket">—</div><div class="l">ticket médio</div></div>
+        </div>
+      </div>
+      <div>
+        <h2>Carrinhos abandonados</h2>
+        <div class="stats" style="margin-bottom:0">
+          <div class="stat"><div class="n y" id="a_abn">—</div><div class="l">em aberto</div></div>
+          <div class="stat"><div class="n y" id="a_abv">—</div><div class="l">valor parado</div></div>
+        </div>
+      </div>
+    </div>
+    <h2 style="margin-top:1rem">Vendas por dia (últimos 14)</h2>
+    <div class="chart" id="a_chart"><div class="empty">—</div></div>
+    <div class="grid2" style="margin-top:1rem">
+      <div>
+        <h2>Por plano</h2>
+        <div class="tblwrap"><table style="min-width:0"><thead><tr><th>Plano</th><th class="num">Vendas</th><th class="num">Faturamento</th></tr></thead><tbody id="a_plano"><tr><td colspan="3" class="empty">—</td></tr></tbody></table></div>
+      </div>
+      <div>
+        <h2>Por método</h2>
+        <div class="tblwrap"><table style="min-width:0"><thead><tr><th>Método</th><th class="num">Pagos</th><th class="num">Abandon.</th></tr></thead><tbody id="a_metodo"><tr><td colspan="3" class="empty">—</td></tr></tbody></table></div>
+      </div>
+    </div>
+    <div class="err" id="anErr"></div>
+  </div>
+
+  <!-- Alunos -->
+  <div class="card hide" id="secS">
+    <div class="manual" style="background:#0c1a17;border-color:var(--teal2);color:var(--ink)">
+      <b>Liberar acesso grátis (cortesia)</b> — para equipe, parcerias ou suporte. Matricula na hora, sem cobrar.
+      <div class="formrow" style="margin-top:.6rem">
+        <input id="gr_email" type="email" placeholder="e-mail do aluno">
+        <input id="gr_name" placeholder="nome (opcional)">
+        <select id="gr_plan"></select>
+        <button class="btn" id="gr_btn" onclick="grant(this)">Liberar</button>
+      </div>
+      <div class="okmsg" id="grOk"></div><div class="err" id="grErr"></div>
+    </div>
+    <div class="toolbar">
+      <input class="w" id="sq" placeholder="Buscar aluno por nome, e-mail ou plano…" oninput="renderStu()">
+      <button class="ghost" onclick="exportCsv('sales')">Exportar vendas (CSV)</button>
+      <button class="ghost" onclick="loadStudents()">Atualizar</button>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>Aluno</th><th>Plano</th><th class="num">Valor</th><th>Quando</th><th>Ação</th></tr></thead>
+        <tbody id="stuRows"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="okmsg" id="stuOk"></div><div class="err" id="stuErr"></div>
   </div>
 
   <!-- Afiliados -->
-  <div class="card" id="secA">
+  <div class="card hide" id="secA">
+    <div class="stats">
+      <div class="stat"><div class="n" id="t_aff">—</div><div class="l">afiliados</div></div>
+      <div class="stat"><div class="n" id="t_sales">—</div><div class="l">comissões</div></div>
+      <div class="stat"><div class="n y" id="t_pend">—</div><div class="l">a pagar</div></div>
+      <div class="stat"><div class="n g" id="t_paid">—</div><div class="l">já paga</div></div>
+    </div>
     <div class="toolbar">
       <input class="w" id="q" placeholder="Buscar por nome ou e-mail…" oninput="renderAff()">
+      <button class="ghost" onclick="exportCsv('affiliates')">Exportar afiliados (CSV)</button>
     </div>
     <div class="tblwrap">
       <table>
@@ -155,21 +239,43 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
     <div class="okmsg" id="payOk"></div>
     <div class="err" id="payErr"></div>
   </div>
+
+  <!-- Carrinhos abandonados -->
+  <div class="card hide" id="secC">
+    <div class="toolbar">
+      <span class="lbl" style="flex:1;min-width:180px">Quem começou a comprar e não pagou. Mande o lembrete e recupere a venda.</span>
+      <button class="ghost" onclick="exportCsv('carts')">Exportar (CSV)</button>
+      <button class="ghost" onclick="loadCarts()">Atualizar</button>
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>Cliente</th><th>Plano</th><th class="num">Valor</th><th>Quando</th><th>Recuperar</th></tr></thead>
+        <tbody id="cartRows"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="okmsg" id="cartOk"></div>
+    <div class="err" id="cartErr"></div>
+  </div>
 </div>
 
 <script>
 var KEY=null;try{KEY=localStorage.getItem('af_admin_key');}catch(e){}
 var AFF=[];            // lista de afiliados do overview
 var SORT='desc';       // ordenação por "a receber"
+var CARTS=[],STU=[],CARTS_LOADED=false,STU_LOADED=false;
+var PLAN_OPTS=[['pro','Pro'],['starter','Starter'],['premium','Premium'],['afiliado','Afiliado Express'],['ponto','Ponto de Coleta']];
 
 function money(c){return ((c||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2});}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
 function methodTag(m){
   var k=(m||'').toLowerCase();
   if(k==='pix')return '<span class="tag pix">Pix</span>';
+  if(k==='card')return '<span class="tag usdt">Cartão</span>';
+  if(k==='cortesia')return '<span class="tag">Cortesia</span>';
   if(k==='liquid')return '<span class="tag liquid">Liquid</span>';
   if(k==='usdt')return '<span class="tag usdt">USDT</span>';
-  return '<span class="tag">—</span>';
+  if(k==='lightning')return '<span class="tag liquid">Lightning</span>';
+  return '<span class="tag">'+esc(m||'—')+'</span>';
 }
 function destOf(a){
   var k=(a.payout_method||'').toLowerCase();
@@ -212,16 +318,23 @@ function adminFetch(url,opts){
 
 // ---- abas ----
 function setTab(t){
-  var aff=t==='aff';
-  document.getElementById('tabA').classList.toggle('sel',aff);
-  document.getElementById('tabP').classList.toggle('sel',!aff);
-  document.getElementById('secA').classList.toggle('hide',!aff);
-  document.getElementById('secP').classList.toggle('hide',aff);
-  if(!aff&&!document.getElementById('month').value){document.getElementById('month').value=curMonth();loadPayouts();}
+  var tabs={an:'tabAn',stu:'tabS',aff:'tabA',pay:'tabP',cart:'tabC'};
+  var secs={an:'secAn',stu:'secS',aff:'secA',pay:'secP',cart:'secC'};
+  for(var k in tabs)document.getElementById(tabs[k]).classList.toggle('sel',k===t);
+  for(var s in secs)document.getElementById(secs[s]).classList.toggle('hide',s!==t);
+  if(t==='pay'&&!document.getElementById('month').value){document.getElementById('month').value=curMonth();loadPayouts();}
+  if(t==='stu'&&!STU_LOADED)loadStudents();
+  if(t==='cart'&&!CARTS_LOADED)loadCarts();
 }
 
 // ---- overview ----
 function boot(){
+  loadAnalytics();
+  loadOverview();
+  if(STU_LOADED)loadStudents();
+  if(CARTS_LOADED)loadCarts();
+}
+function loadOverview(){
   document.getElementById('affRows').innerHTML='<tr><td colspan="6" class="empty">Carregando…</td></tr>';
   adminFetch('/api/af/admin/overview').then(function(d){
     var t=d.totals||{};
@@ -231,7 +344,6 @@ function boot(){
     document.getElementById('t_paid').textContent=money(t.paid_cents);
     AFF=d.affiliates||[];
     renderAff();
-    // se a aba de pagamentos já está aberta, atualiza
     if(!document.getElementById('secP').classList.contains('hide')&&document.getElementById('month').value)loadPayouts();
   }).catch(function(e){
     if(e&&e.handled)return;
@@ -321,7 +433,123 @@ function closeMonth(){
    });
 }
 
+// ---- analytics ----
+function loadAnalytics(){
+  document.getElementById('anErr').textContent='';
+  adminFetch('/api/af/admin/analytics').then(function(d){
+    var k=d.kpi||{};
+    document.getElementById('k_fat').textContent=money(k.fat_mes_cents);
+    document.getElementById('k_vendas').textContent=k.vendas_mes!=null?k.vendas_mes:0;
+    document.getElementById('k_conv').textContent=(k.conversao!=null?k.conversao:0)+'%';
+    document.getElementById('k_aband').textContent=k.abandonados!=null?k.abandonados:0;
+    document.getElementById('a_fatt').textContent=money(k.fat_total_cents);
+    document.getElementById('a_ticket').textContent=money(k.ticket_cents);
+    document.getElementById('a_abn').textContent=k.abandonados!=null?k.abandonados:0;
+    document.getElementById('a_abv').textContent=money(k.abandonados_cents);
+    renderChart(d.serie||[]);renderMini('a_plano',d.por_plano||[],'plano');renderMini('a_metodo',d.por_metodo||[],'metodo');
+  }).catch(function(e){if(e&&e.handled)return;document.getElementById('anErr').textContent=(e&&e.detail)||'Erro ao carregar analytics.';});
+}
+function renderChart(serie){
+  var el=document.getElementById('a_chart');
+  if(!serie.length){el.innerHTML='<div class="empty">Sem vendas ainda.</div>';return;}
+  var max=Math.max.apply(null,serie.map(function(s){return s.cents||0;}).concat([1]));
+  el.innerHTML=serie.map(function(s){
+    var h=Math.round(((s.cents||0)/max)*98)+2;
+    var dia=(s.dia||'').slice(8,10)+'/'+(s.dia||'').slice(5,7);
+    return '<div class="bar" title="'+esc(s.dia)+': '+money(s.cents)+'"><div class="bn">'+(s.vendas||0)+'</div><div class="bv" style="height:'+h+'px"></div><div class="bd">'+dia+'</div></div>';
+  }).join('');
+}
+function renderMini(id,rows,kind){
+  var tb=document.getElementById(id);
+  if(!rows.length){tb.innerHTML='<tr><td colspan="3" class="empty">—</td></tr>';return;}
+  tb.innerHTML=rows.map(function(r){
+    if(kind==='plano')return '<tr><td>'+esc(r.plan||'—')+'</td><td class="num">'+(r.vendas||0)+'</td><td class="num rec">'+money(r.cents)+'</td></tr>';
+    return '<tr><td>'+methodTag(r.method)+'</td><td class="num">'+(r.pagos||0)+'</td><td class="num warn">'+(r.abandonados||0)+'</td></tr>';
+  }).join('');
+}
+// ---- alunos ----
+function fillPlans(){
+  var s=document.getElementById('gr_plan');if(!s||s.options.length)return;
+  s.innerHTML=PLAN_OPTS.map(function(p){return '<option value="'+p[0]+'">'+esc(p[1])+'</option>';}).join('');
+}
+function loadStudents(){
+  STU_LOADED=true;document.getElementById('stuErr').textContent='';
+  document.getElementById('stuRows').innerHTML='<tr><td colspan="5" class="empty">Carregando…</td></tr>';
+  adminFetch('/api/af/admin/students').then(function(d){STU=d.alunos||[];renderStu();})
+   .catch(function(e){if(e&&e.handled)return;document.getElementById('stuErr').textContent=(e&&e.detail)||'Erro ao carregar alunos.';document.getElementById('stuRows').innerHTML='<tr><td colspan="5" class="empty">Não foi possível carregar.</td></tr>';});
+}
+function renderStu(){
+  var q=(document.getElementById('sq').value||'').toLowerCase().trim();
+  var rows=STU.filter(function(s){if(!q)return true;return (s.name||'').toLowerCase().indexOf(q)>=0||(s.email||'').toLowerCase().indexOf(q)>=0||(s.plan||'').toLowerCase().indexOf(q)>=0;});
+  var tb=document.getElementById('stuRows');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="empty">'+(q?'Nenhum aluno encontrado.':'Nenhuma venda ainda.')+'</td></tr>';return;}
+  tb.innerHTML=rows.map(function(s){
+    var dt=(s.quando||'').slice(0,10).split('-').reverse().join('/');
+    var val=s.method==='cortesia'?'<span class="lbl">cortesia</span>':money(s.amount_cents);
+    return '<tr>'+
+      '<td class="name">'+esc(s.name||'—')+'<div class="email">'+esc(s.email||'')+'</div></td>'+
+      '<td>'+esc(s.plan_label||s.plan)+(s.bump?' <span class="tag">+bump</span>':'')+'</td>'+
+      '<td class="num">'+val+'</td>'+
+      '<td>'+dt+'</td>'+
+      '<td><button class="minibtn" onclick="reenroll(\''+esc(s.order_id)+'\',this)">Reenviar acesso</button></td>'+
+    '</tr>';
+  }).join('');
+}
+function reenroll(oid,btn){
+  var t=btn.textContent;btn.disabled=true;btn.textContent='Enviando…';
+  document.getElementById('stuOk').textContent='';document.getElementById('stuErr').textContent='';
+  adminFetch('/api/af/admin/reenroll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:oid})})
+   .then(function(r){document.getElementById('stuOk').textContent='✓ Acesso reenviado para '+(r.email||'')+'.';btn.textContent='Reenviado ✓';setTimeout(function(){btn.textContent=t;btn.disabled=false;},2000);})
+   .catch(function(e){btn.textContent=t;btn.disabled=false;if(e&&e.handled)return;document.getElementById('stuErr').textContent=(e&&e.detail)||'Falha ao reenviar.';});
+}
+function grant(btn){
+  var email=(document.getElementById('gr_email').value||'').trim();
+  var plan=document.getElementById('gr_plan').value;
+  var name=(document.getElementById('gr_name').value||'').trim();
+  document.getElementById('grOk').textContent='';document.getElementById('grErr').textContent='';
+  if(email.indexOf('@')<0){document.getElementById('grErr').textContent='Informe um e-mail válido.';return;}
+  var t=btn.textContent;btn.disabled=true;btn.textContent='Liberando…';
+  adminFetch('/api/af/admin/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,plan:plan,name:name})})
+   .then(function(r){document.getElementById('grOk').textContent='✓ Acesso liberado para '+r.email+'.';document.getElementById('gr_email').value='';document.getElementById('gr_name').value='';btn.textContent=t;btn.disabled=false;STU_LOADED=false;if(!document.getElementById('secS').classList.contains('hide'))loadStudents();})
+   .catch(function(e){btn.textContent=t;btn.disabled=false;if(e&&e.handled)return;document.getElementById('grErr').textContent=(e&&e.detail)||'Falha ao liberar acesso.';});
+}
+// ---- carrinhos ----
+function ageOf(iso){
+  if(!iso)return '';var then=new Date(String(iso).replace(' ','T'));if(isNaN(then))return '';
+  var h=Math.floor((Date.now()-then.getTime())/3600000);
+  if(h<1)return 'agora há pouco';if(h<24)return 'há '+h+'h';return 'há '+Math.floor(h/24)+'d';
+}
+function loadCarts(){
+  CARTS_LOADED=true;document.getElementById('cartErr').textContent='';document.getElementById('cartOk').textContent='';
+  document.getElementById('cartRows').innerHTML='<tr><td colspan="5" class="empty">Carregando…</td></tr>';
+  adminFetch('/api/af/admin/carts').then(function(d){CARTS=d.carrinhos||[];renderCarts();})
+   .catch(function(e){if(e&&e.handled)return;document.getElementById('cartErr').textContent=(e&&e.detail)||'Erro ao carregar carrinhos.';document.getElementById('cartRows').innerHTML='<tr><td colspan="5" class="empty">Não foi possível carregar.</td></tr>';});
+}
+function renderCarts(){
+  var tb=document.getElementById('cartRows');
+  if(!CARTS.length){tb.innerHTML='<tr><td colspan="5" class="empty">Nenhum carrinho abandonado 🎉</td></tr>';return;}
+  tb.innerHTML=CARTS.map(function(c,i){
+    var dt=(c.quando||'').slice(0,10).split('-').reverse().join('/');
+    return '<tr>'+
+      '<td class="name">'+esc(c.name||'—')+'<div class="email">'+esc(c.email||'')+'</div></td>'+
+      '<td>'+esc(c.plan_label||c.plan)+'</td>'+
+      '<td class="num rec">'+money(c.amount_cents)+'</td>'+
+      '<td>'+dt+'<div class="age">'+ageOf(c.created_at||c.quando)+'</div></td>'+
+      '<td><div class="rowbtn"><button class="minibtn" onclick="copyCart('+i+',0,this)">Link</button><button class="minibtn go" onclick="copyCart('+i+',1,this)">Mensagem</button></div></td>'+
+    '</tr>';
+  }).join('');
+}
+function copyCart(i,kind,btn){
+  var c=CARTS[i];if(!c)return;var txt=kind?c.whatsapp_msg:c.recovery_link;
+  var done=function(){var t=btn.textContent;btn.textContent='Copiado!';setTimeout(function(){btn.textContent=t;},1400);};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(function(){window.prompt('Copie:',txt);});
+  else window.prompt('Copie:',txt);
+}
+// ---- export CSV ----
+function exportCsv(what){window.open('/api/af/admin/export?what='+encodeURIComponent(what)+'&key='+encodeURIComponent(KEY||''),'_blank');}
+
 // ---- início ----
+fillPlans();
 if(KEY){document.getElementById('gate').classList.add('hide');document.getElementById('app').classList.remove('hide');boot();}
 else{showGate('');}
 </script>
