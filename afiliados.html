@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Afiliados · Destravando as Vendas</title>
+<style>
+:root{--bg:#06110f;--ink:#eafaf5;--mut:#8fb3aa;--teal:#15d6b6;--teal2:#0e8c7f;--line:#17302b;--card:#0c1a17}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;overflow-x:hidden}
+.orb{position:fixed;border-radius:50%;filter:blur(70px);opacity:.33;z-index:0}
+.orb.a{width:380px;height:380px;background:#15d6b6;top:-120px;right:-80px}
+.orb.b{width:320px;height:320px;background:#0e8c7f;bottom:-120px;left:-90px}
+.wrap{position:relative;z-index:1;width:100%;max-width:440px}
+.brand{display:flex;align-items:center;gap:.5rem;font-weight:800;font-size:1.15rem;margin-bottom:1rem;justify-content:center}
+.m{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:900}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.5rem}
+h1{font-size:1.3rem;margin:.2rem 0 .3rem}
+.sub{color:var(--mut);font-size:.9rem;margin-bottom:1.1rem}
+label{display:block;font-size:.82rem;color:var(--mut);margin:.7rem 0 .25rem}
+input{width:100%;padding:.72rem .8rem;border-radius:11px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:1rem}
+input:focus{outline:none;border-color:var(--teal)}
+.btn{width:100%;margin-top:1.1rem;padding:.8rem;border:0;border-radius:12px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:800;font-size:1rem;cursor:pointer}
+.btn:disabled{opacity:.6}
+.tabs{display:flex;gap:.4rem;margin-bottom:1rem;background:#071512;border:1px solid var(--line);border-radius:12px;padding:.25rem}
+.tab{flex:1;text-align:center;padding:.55rem;border-radius:9px;cursor:pointer;font-weight:700;color:var(--mut);font-size:.9rem}
+.tab.sel{background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d}
+.hint{font-size:.78rem;color:var(--mut);margin-top:.3rem}
+.err{color:#ff8080;font-size:.85rem;margin-top:.6rem;min-height:1em}
+.ok{color:var(--teal)}
+.badge{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--teal);border:1px solid var(--teal2);border-radius:999px;padding:.25rem .7rem;margin-bottom:1rem}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div>
+<div class="wrap">
+  <div class="brand"><span class="m">D</span>Destravando as Vendas</div>
+  <div class="card">
+    <div class="badge">💸 Ganhe 20% por venda indicada</div>
+    <div class="tabs">
+      <div class="tab sel" id="tSign" onclick="mode('signup')">Criar conta</div>
+      <div class="tab" id="tLogin" onclick="mode('login')">Entrar</div>
+    </div>
+
+    <div id="signup">
+      <h1>Seja um afiliado</h1>
+      <div class="sub">Indique o curso e receba <b>20% de comissão</b> em cada venda, paga todo dia 05 na sua carteira.</div>
+      <label>Seu nome</label><input id="s_name" placeholder="Nome completo">
+      <label>E-mail</label><input id="s_email" type="email" placeholder="voce@email.com">
+      <label>Senha (mínimo 6)</label><input id="s_pass" type="password" placeholder="crie uma senha">
+      <label>Carteira Liquid (DePix) <span style="font-weight:400">— opcional, pode preencher depois</span></label><input id="s_liquid" placeholder="endereço Liquid / Lightning">
+      <label>Carteira USDT <span style="font-weight:400">— opcional</span></label><input id="s_usdt" placeholder="endereço USDT (rede)">
+      <label>Seu cupom <span style="font-weight:400">— opcional (o seguidor digita e ganha 10%)</span></label><input id="s_coupon" placeholder="ex.: JOANA" style="text-transform:uppercase">
+      <div class="hint">Você escolhe em qual carteira quer receber. Dá pra cadastrar/editar no painel.</div>
+      <button class="btn" id="bSign">Criar minha conta de afiliado</button>
+    </div>
+
+    <div id="login" style="display:none">
+      <h1>Entrar no painel</h1>
+      <div class="sub">Acesse para pegar seu link, ver suas vendas e comissões.</div>
+      <label>E-mail</label><input id="l_email" type="email" placeholder="voce@email.com">
+      <label>Senha</label><input id="l_pass" type="password" placeholder="sua senha">
+      <button class="btn" id="bLogin">Entrar</button>
+    </div>
+    <p class="err" id="err"></p>
+  </div>
+</div>
+<script>
+function mode(m){
+  var s=m==='signup';
+  document.getElementById('signup').style.display=s?'block':'none';
+  document.getElementById('login').style.display=s?'none':'block';
+  document.getElementById('tSign').classList.toggle('sel',s);
+  document.getElementById('tLogin').classList.toggle('sel',!s);
+  document.getElementById('err').textContent='';
+}
+function save(d){try{localStorage.setItem('af_token',d.token);localStorage.setItem('af_code',d.code);}catch(e){}location.href='/afiliados/painel';}
+function post(url,body,btn,label){
+  var err=document.getElementById('err');err.textContent='';btn.disabled=true;var t=btn.textContent;btn.textContent='Aguarde...';
+  fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+   .then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+   .then(function(o){if(!o.ok){err.textContent=o.d.detail||'Erro.';btn.disabled=false;btn.textContent=t;return;}save(o.d);})
+   .catch(function(){err.textContent='Falha de conexão.';btn.disabled=false;btn.textContent=t;});
+}
+document.getElementById('bSign').addEventListener('click',function(){
+  post('/api/af/signup',{name:s_name.value.trim(),email:s_email.value.trim(),password:s_pass.value,
+    liquid_wallet:s_liquid.value.trim(),usdt_wallet:s_usdt.value.trim(),coupon:s_coupon.value.trim()},this);
+});
+document.getElementById('bLogin').addEventListener('click',function(){
+  post('/api/af/login',{email:l_email.value.trim(),password:l_pass.value},this);
+});
+try{if(localStorage.getItem('af_token'))location.href='/afiliados/painel';}catch(e){}
+</script>
+</body>
+</html>

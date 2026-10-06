@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do afiliado · Destravando as Vendas</title>
+<style>
+:root{--bg:#06110f;--ink:#eafaf5;--mut:#8fb3aa;--teal:#15d6b6;--teal2:#0e8c7f;--line:#17302b;--card:#0c1a17}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;padding:20px;overflow-x:hidden}
+.orb{position:fixed;border-radius:50%;filter:blur(70px);opacity:.3;z-index:0}
+.orb.a{width:360px;height:360px;background:#15d6b6;top:-120px;right:-80px}
+.orb.b{width:300px;height:300px;background:#0e8c7f;bottom:-120px;left:-90px}
+.wrap{position:relative;z-index:1;max-width:760px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem}
+.brand{display:flex;align-items:center;gap:.5rem;font-weight:800}
+.m{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:900}
+.logout{color:var(--mut);font-size:.85rem;text-decoration:none;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.2rem;margin-bottom:1rem}
+h2{font-size:1rem;margin:0 0 .7rem}
+.lbl{color:var(--mut);font-size:.8rem}
+.linkbox{display:flex;gap:.5rem;margin-top:.4rem}
+.linkbox input{flex:1;padding:.65rem .7rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.9rem}
+.mini{padding:.65rem .9rem;border:0;border-radius:10px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:800;cursor:pointer;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
+.stat{background:#071512;border:1px solid var(--line);border-radius:12px;padding:.9rem;text-align:center}
+.stat .n{font-size:1.5rem;font-weight:800}
+.stat .n.g{color:var(--teal)}
+.stat .l{color:var(--mut);font-size:.75rem;margin-top:.2rem}
+label{display:block;font-size:.8rem;color:var(--mut);margin:.6rem 0 .25rem}
+input.w,select.w{width:100%;padding:.65rem .7rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.95rem}
+.save{margin-top:.8rem;padding:.7rem 1rem;border:0;border-radius:10px;background:#123;color:var(--ink);border:1px solid var(--teal2);font-weight:700;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{text-align:left;padding:.5rem .4rem;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600}
+.pill{font-size:.72rem;padding:.12rem .5rem;border-radius:999px}
+.pill.p{background:#2a2410;color:#f3d57a}
+.pill.pg{background:#0f2a22;color:var(--teal)}
+.note{color:var(--mut);font-size:.8rem;margin-top:.5rem}
+.okmsg{color:var(--teal);font-size:.85rem;margin-top:.4rem;min-height:1em}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><span class="m">D</span>Painel do afiliado</div>
+    <a class="logout" onclick="logout()">sair</a>
+  </div>
+
+  <div class="card">
+    <h2>Seu link de indicação</h2>
+    <div class="lbl">Compartilhe este link. Toda venda feita por ele conta pra você (20%).</div>
+    <div class="linkbox"><input id="link" readonly><button class="mini" onclick="copyLink(this)">Copiar</button></div>
+    <div class="lbl" style="margin-top:.9rem">Ou seu <b>cupom</b> — o seguidor digita no checkout, ganha 10% de desconto e a venda conta pra você (mesmo sem o link):</div>
+    <div class="linkbox"><input id="coupon" readonly><button class="mini" onclick="copyCoupon(this)">Copiar</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Suas comissões</h2>
+    <div class="stats">
+      <div class="stat"><div class="n" id="st_count">0</div><div class="l">vendas</div></div>
+      <div class="stat"><div class="n g" id="st_pend">R$ 0,00</div><div class="l">a receber</div></div>
+      <div class="stat"><div class="n" id="st_paid">R$ 0,00</div><div class="l">já pago</div></div>
+    </div>
+    <div class="note">💰 Pagamento todo dia <b>05</b>, referente às vendas do mês anterior, na carteira que você cadastrar abaixo.</div>
+  </div>
+
+  <div class="card">
+    <h2>Como você quer receber</h2>
+    <label>Método de pagamento</label>
+    <select class="w" id="method">
+      <option value="pix">Pix</option>
+      <option value="liquid">Liquid / DePix</option>
+      <option value="usdt">USDT</option>
+      <option value="btc">Bitcoin on-chain</option>
+      <option value="lightning">Lightning (LN)</option>
+    </select>
+    <label>Chave Pix</label><input class="w" id="pix_key" placeholder="CPF, e-mail, telefone ou chave aleatória">
+    <label>Carteira Liquid (DePix)</label><input class="w" id="liquid" placeholder="endereço Liquid">
+    <label>Carteira USDT</label><input class="w" id="usdt" placeholder="endereço USDT (informe a rede)">
+    <label>Bitcoin on-chain</label><input class="w" id="btc" placeholder="endereço BTC (bc1...)">
+    <label>Lightning (LN)</label><input class="w" id="ln" placeholder="endereço Lightning (voce@carteira.com)">
+    <div class="lbl" style="margin-top:.5rem">Preencha só o do método escolhido. Pagamento todo dia 05.</div>
+    <button class="save" onclick="saveWallet(this)">Salvar</button>
+    <div class="okmsg" id="wok"></div>
+  </div>
+
+  <div class="card">
+    <h2>Histórico</h2>
+    <table><thead><tr><th>Data</th><th>Plano</th><th>Venda</th><th>Comissão</th><th>Status</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="5" class="lbl">Sem vendas ainda. Divulgue seu link! 🚀</td></tr></tbody></table>
+  </div>
+</div>
+<script>
+var TOKEN=null;try{TOKEN=localStorage.getItem('af_token');}catch(e){}
+if(!TOKEN){location.href='/afiliados';}
+function money(c){return 'R$ '+((c||0)/100).toFixed(2).replace('.',',');}
+function logout(){try{localStorage.removeItem('af_token');localStorage.removeItem('af_code');}catch(e){}location.href='/afiliados';}
+function copyLink(b){var i=document.getElementById('link');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
+function copyCoupon(b){var i=document.getElementById('coupon');navigator.clipboard.writeText(i.value).then(function(){b.textContent='Copiado!';setTimeout(function(){b.textContent='Copiar';},1500);}).catch(function(){i.select();});}
+function hdr(){return {'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'};}
+function load(){
+  fetch('/api/af/me',{headers:hdr()}).then(function(r){if(r.status===401){logout();return null;}return r.json();}).then(function(d){
+    if(!d)return;
+    document.getElementById('link').value=d.link;
+    document.getElementById('coupon').value=d.coupon||'';
+    document.getElementById('st_count').textContent=d.totals.count;
+    document.getElementById('st_pend').textContent=money(d.totals.pending_cents);
+    document.getElementById('st_paid').textContent=money(d.totals.paid_cents);
+    document.getElementById('method').value=d.payout_method||'pix';
+    document.getElementById('pix_key').value=d.pix_key||'';
+    document.getElementById('liquid').value=d.liquid_wallet||'';
+    document.getElementById('usdt').value=d.usdt_wallet||'';
+    document.getElementById('btc').value=d.btc_address||'';
+    document.getElementById('ln').value=d.ln_address||'';
+    var tb=document.getElementById('rows');
+    if(d.sales&&d.sales.length){tb.innerHTML=d.sales.map(function(s){
+      var dt=(s.created_at||'').slice(0,10).split('-').reverse().join('/');
+      var pill=s.commission_status==='paid'?'<span class="pill pg">pago</span>':'<span class="pill p">a receber</span>';
+      return '<tr><td>'+dt+'</td><td>'+s.plan+'</td><td>'+money(s.amount_cents)+'</td><td>'+money(s.commission_cents)+'</td><td>'+pill+'</td></tr>';
+    }).join('');}
+  }).catch(function(){});
+}
+function saveWallet(b){
+  var w=document.getElementById('wok');w.textContent='';b.disabled=true;
+  fetch('/api/af/wallet',{method:'POST',headers:hdr(),body:JSON.stringify({payout_method:document.getElementById('method').value,pix_key:document.getElementById('pix_key').value.trim(),liquid_wallet:document.getElementById('liquid').value.trim(),usdt_wallet:document.getElementById('usdt').value.trim(),btc_address:document.getElementById('btc').value.trim(),ln_address:document.getElementById('ln').value.trim()})})
+   .then(function(r){return r.json();}).then(function(){w.textContent='✓ Carteiras salvas';b.disabled=false;})
+   .catch(function(){w.textContent='Erro ao salvar';b.disabled=false;});
+}
+load();
+</script>
+</body>
+</html>

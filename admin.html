@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Afiliados (dono) · Destravando as Vendas</title>
+<style>
+:root{--bg:#06110f;--ink:#eafaf5;--mut:#8fb3aa;--teal:#15d6b6;--teal2:#0e8c7f;--line:#17302b;--card:#0c1a17}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;padding:20px;overflow-x:hidden}
+.orb{position:fixed;border-radius:50%;filter:blur(70px);opacity:.3;z-index:0}
+.orb.a{width:360px;height:360px;background:#15d6b6;top:-120px;right:-80px}
+.orb.b{width:300px;height:300px;background:#0e8c7f;bottom:-120px;left:-90px}
+.wrap{position:relative;z-index:1;max-width:980px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;flex-wrap:wrap;gap:.6rem}
+.brand{display:flex;align-items:center;gap:.5rem;font-weight:800}
+.m{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:9px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:900}
+.logout{color:var(--mut);font-size:.85rem;text-decoration:none;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.2rem;margin-bottom:1rem}
+h2{font-size:1rem;margin:0 0 .7rem}
+.lbl{color:var(--mut);font-size:.8rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem}
+.stat{background:#071512;border:1px solid var(--line);border-radius:12px;padding:1rem;text-align:center}
+.stat .n{font-size:1.5rem;font-weight:800;word-break:break-word}
+.stat .n.g{color:var(--teal)}
+.stat .n.y{color:#f3d57a}
+.stat .l{color:var(--mut);font-size:.75rem;margin-top:.25rem}
+.tabs{display:flex;gap:.4rem;margin-bottom:1rem;background:#071512;border:1px solid var(--line);border-radius:12px;padding:.25rem;max-width:380px}
+.tab{flex:1;text-align:center;padding:.55rem;border-radius:9px;cursor:pointer;font-weight:700;color:var(--mut);font-size:.9rem}
+.tab.sel{background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d}
+.toolbar{display:flex;gap:.6rem;align-items:center;margin-bottom:.9rem;flex-wrap:wrap}
+input.w,input.month{padding:.65rem .7rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.95rem}
+input.w{flex:1;min-width:180px}
+input:focus{outline:none;border-color:var(--teal)}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.85rem;min-width:560px}
+th,td{text-align:left;padding:.55rem .5rem;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:600}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--ink)}
+td.num,th.num{text-align:right}
+td.name{white-space:normal;font-weight:600}
+td.email{color:var(--mut);white-space:normal}
+td.dest{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.76rem;color:var(--mut);white-space:normal;word-break:break-all;max-width:260px}
+.tag{font-size:.72rem;padding:.14rem .55rem;border-radius:999px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.tag.pix{color:#7ad7a0;border-color:#1c3b2e}
+.tag.liquid{color:var(--teal);border-color:var(--teal2)}
+.tag.usdt{color:#7ab8d7;border-color:#1c3340}
+.rec{color:var(--teal);font-weight:700}
+.paid{color:var(--mut)}
+tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;font-size:.95rem;padding-top:.8rem}
+.warn{color:#f3d57a}
+.btn{padding:.7rem 1.1rem;border:0;border-radius:11px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:800;font-size:.95rem;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ghost{background:#071512;border:1px solid var(--teal2);color:var(--ink);font-weight:700;padding:.6rem .9rem;border-radius:10px;cursor:pointer;font-size:.85rem}
+.note{color:var(--mut);font-size:.82rem;margin-top:.8rem;line-height:1.5}
+.note b{color:var(--ink)}
+.manual{background:#211b0c;border:1px solid #4a3c10;border-radius:12px;padding:.8rem .9rem;color:#f3d57a;font-size:.84rem;line-height:1.5;margin-bottom:1rem}
+.okmsg{color:var(--teal);font-size:.85rem;margin-top:.6rem;min-height:1em}
+.err{color:#ff8080;font-size:.85rem;margin-top:.6rem;min-height:1em}
+.empty{color:var(--mut);text-align:center;padding:1.2rem}
+/* gate */
+#gate{position:fixed;inset:0;z-index:5;background:var(--bg);display:grid;place-items:center;padding:24px}
+#gate .g{width:100%;max-width:420px}
+#gate .brand{justify-content:center;font-size:1.15rem;margin-bottom:1rem}
+#gate h1{font-size:1.25rem;margin:.2rem 0 .3rem}
+#gate .sub{color:var(--mut);font-size:.9rem;margin-bottom:1.1rem}
+#gate label{display:block;font-size:.82rem;color:var(--mut);margin:.7rem 0 .25rem}
+#gate input{width:100%;padding:.72rem .8rem;border-radius:11px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:1rem}
+#gate input:focus{outline:none;border-color:var(--teal)}
+#gate .btn{width:100%;margin-top:1.1rem}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div>
+
+<!-- Portão: chave de admin -->
+<div id="gate">
+  <div class="g">
+    <div class="brand"><span class="m">D</span>Destravando as Vendas</div>
+    <div class="card">
+      <h1>Painel do dono</h1>
+      <div class="sub">Área restrita. Informe a <b>chave de admin</b> para ver e gerenciar os afiliados.</div>
+      <label>Chave de admin</label>
+      <input id="g_key" type="password" placeholder="cole sua chave" autocomplete="off">
+      <button class="btn" id="g_btn">Entrar</button>
+      <p class="err" id="g_err"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Painel -->
+<div class="wrap hide" id="app">
+  <div class="top">
+    <div class="brand"><span class="m">D</span>Afiliados · painel do dono</div>
+    <div style="display:flex;gap:1rem;align-items:center">
+      <a class="logout" onclick="reload()">atualizar</a>
+      <a class="logout" onclick="forget()">trocar chave</a>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="t_aff">—</div><div class="l">afiliados</div></div>
+    <div class="stat"><div class="n" id="t_sales">—</div><div class="l">vendas</div></div>
+    <div class="stat"><div class="n y" id="t_pend">—</div><div class="l">comissão a pagar</div></div>
+    <div class="stat"><div class="n g" id="t_paid">—</div><div class="l">já paga</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab sel" id="tabA" onclick="setTab('aff')">Afiliados</div>
+    <div class="tab" id="tabP" onclick="setTab('pay')">Pagamentos do mês</div>
+  </div>
+
+  <!-- Afiliados -->
+  <div class="card" id="secA">
+    <div class="toolbar">
+      <input class="w" id="q" placeholder="Buscar por nome ou e-mail…" oninput="renderAff()">
+    </div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>
+          <th>Afiliado</th><th>Cupom</th><th>Recebe em</th>
+          <th class="num">Vendas</th>
+          <th class="num sortable" id="thRec" onclick="toggleSort()">A receber ▼</th>
+          <th class="num">Já pago</th>
+        </tr></thead>
+        <tbody id="affRows"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="err" id="affErr"></div>
+  </div>
+
+  <!-- Pagamentos do mês -->
+  <div class="card hide" id="secP">
+    <div class="toolbar">
+      <span class="lbl">Mês de referência</span>
+      <input class="month" id="month" type="month" onchange="loadPayouts()">
+      <button class="ghost" onclick="loadPayouts()">Recalcular</button>
+    </div>
+    <div class="manual">⚠️ O envio do dinheiro é <b>manual</b>. Confira cada carteira / chave Pix, faça os pagamentos por fora e só então clique em <b>Marcar como pago</b> — isso apenas registra que o mês foi quitado.</div>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>
+          <th>Afiliado</th><th>Método</th><th>Carteira / chave</th>
+          <th class="num">Vendas</th><th class="num">Comissão</th>
+        </tr></thead>
+        <tbody id="payRows"><tr><td colspan="5" class="empty">Escolha um mês.</td></tr></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1rem">
+      <div class="note">Pessoas a pagar: <b id="payCount">0</b></div>
+      <button class="btn" id="closeBtn" onclick="closeMonth()" disabled>Marcar mês como pago</button>
+    </div>
+    <div class="okmsg" id="payOk"></div>
+    <div class="err" id="payErr"></div>
+  </div>
+</div>
+
+<script>
+var KEY=null;try{KEY=localStorage.getItem('af_admin_key');}catch(e){}
+var AFF=[];            // lista de afiliados do overview
+var SORT='desc';       // ordenação por "a receber"
+
+function money(c){return ((c||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2});}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
+function methodTag(m){
+  var k=(m||'').toLowerCase();
+  if(k==='pix')return '<span class="tag pix">Pix</span>';
+  if(k==='liquid')return '<span class="tag liquid">Liquid</span>';
+  if(k==='usdt')return '<span class="tag usdt">USDT</span>';
+  return '<span class="tag">—</span>';
+}
+function destOf(a){
+  var k=(a.payout_method||'').toLowerCase();
+  if(k==='pix')return a.pix_key||'';
+  if(k==='liquid')return a.liquid_wallet||'';
+  if(k==='usdt')return a.usdt_wallet||'';
+  return a.pix_key||a.liquid_wallet||a.usdt_wallet||'';
+}
+function curMonth(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+
+// ---- portão / chave ----
+function showGate(msg){
+  document.getElementById('app').classList.add('hide');
+  document.getElementById('gate').classList.remove('hide');
+  document.getElementById('g_err').textContent=msg||'';
+  var i=document.getElementById('g_key');i.value='';i.focus();
+}
+function enterKey(){
+  var v=document.getElementById('g_key').value.trim();
+  if(!v){document.getElementById('g_err').textContent='Informe a chave.';return;}
+  KEY=v;try{localStorage.setItem('af_admin_key',v);}catch(e){}
+  document.getElementById('gate').classList.add('hide');
+  document.getElementById('app').classList.remove('hide');
+  boot();
+}
+function forget(){KEY=null;try{localStorage.removeItem('af_admin_key');}catch(e){}showGate('');}
+function reload(){boot();}
+document.getElementById('g_btn').addEventListener('click',enterKey);
+document.getElementById('g_key').addEventListener('keydown',function(e){if(e.key==='Enter')enterKey();});
+
+// ---- fetch com chave + tratamento de 401 ----
+function adminFetch(url,opts){
+  opts=opts||{};opts.headers=opts.headers||{};
+  opts.headers['X-Admin-Key']=KEY||'';
+  return fetch(url,opts).then(function(r){
+    if(r.status===401){forget();showGate('Chave inválida. Tente de novo.');return Promise.reject({handled:true});}
+    return r.json().then(function(d){if(!r.ok)return Promise.reject(d||{});return d;});
+  });
+}
+
+// ---- abas ----
+function setTab(t){
+  var aff=t==='aff';
+  document.getElementById('tabA').classList.toggle('sel',aff);
+  document.getElementById('tabP').classList.toggle('sel',!aff);
+  document.getElementById('secA').classList.toggle('hide',!aff);
+  document.getElementById('secP').classList.toggle('hide',aff);
+  if(!aff&&!document.getElementById('month').value){document.getElementById('month').value=curMonth();loadPayouts();}
+}
+
+// ---- overview ----
+function boot(){
+  document.getElementById('affRows').innerHTML='<tr><td colspan="6" class="empty">Carregando…</td></tr>';
+  adminFetch('/api/af/admin/overview').then(function(d){
+    var t=d.totals||{};
+    document.getElementById('t_aff').textContent=t.affiliates!=null?t.affiliates:0;
+    document.getElementById('t_sales').textContent=t.sales!=null?t.sales:0;
+    document.getElementById('t_pend').textContent=money(t.pending_cents);
+    document.getElementById('t_paid').textContent=money(t.paid_cents);
+    AFF=d.affiliates||[];
+    renderAff();
+    // se a aba de pagamentos já está aberta, atualiza
+    if(!document.getElementById('secP').classList.contains('hide')&&document.getElementById('month').value)loadPayouts();
+  }).catch(function(e){
+    if(e&&e.handled)return;
+    document.getElementById('affErr').textContent=(e&&e.detail)||'Erro ao carregar afiliados.';
+    document.getElementById('affRows').innerHTML='<tr><td colspan="6" class="empty">Não foi possível carregar.</td></tr>';
+  });
+}
+
+function toggleSort(){
+  SORT=SORT==='desc'?'asc':'desc';
+  document.getElementById('thRec').textContent='A receber '+(SORT==='desc'?'▼':'▲');
+  renderAff();
+}
+
+function renderAff(){
+  document.getElementById('affErr').textContent='';
+  var q=(document.getElementById('q').value||'').toLowerCase().trim();
+  var rows=AFF.filter(function(a){
+    if(!q)return true;
+    return (a.name||'').toLowerCase().indexOf(q)>=0||(a.email||'').toLowerCase().indexOf(q)>=0;
+  });
+  rows.sort(function(a,b){
+    var d=(a.pending_cents||0)-(b.pending_cents||0);
+    return SORT==='desc'?-d:d;
+  });
+  var tb=document.getElementById('affRows');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="empty">'+(q?'Nenhum afiliado encontrado.':'Nenhum afiliado ainda.')+'</td></tr>';return;}
+  tb.innerHTML=rows.map(function(a){
+    var dest=destOf(a);
+    return '<tr>'+
+      '<td class="name">'+esc(a.name||'—')+'<div class="email">'+esc(a.email||'')+'</div></td>'+
+      '<td>'+(a.coupon?esc(a.coupon):'<span class="lbl">—</span>')+'</td>'+
+      '<td>'+methodTag(a.payout_method)+'<div class="dest">'+(dest?esc(dest):'<span class="warn">sem carteira</span>')+'</div></td>'+
+      '<td class="num">'+(a.sales_count||0)+'</td>'+
+      '<td class="num rec">'+money(a.pending_cents)+'</td>'+
+      '<td class="num paid">'+money(a.paid_cents)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ---- pagamentos do mês ----
+function loadPayouts(){
+  var m=document.getElementById('month').value;
+  document.getElementById('payOk').textContent='';document.getElementById('payErr').textContent='';
+  if(!m){document.getElementById('payRows').innerHTML='<tr><td colspan="5" class="empty">Escolha um mês.</td></tr>';return;}
+  document.getElementById('payRows').innerHTML='<tr><td colspan="5" class="empty">Carregando…</td></tr>';
+  document.getElementById('closeBtn').disabled=true;
+  adminFetch('/api/af/admin/payouts?month='+encodeURIComponent(m)).then(function(d){
+    var itens=d.itens||[];
+    var tb=document.getElementById('payRows');
+    document.getElementById('payCount').textContent=itens.length;
+    if(!itens.length){
+      tb.innerHTML='<tr><td colspan="5" class="empty">Nenhuma comissão a pagar neste mês.</td></tr>';
+      document.getElementById('closeBtn').disabled=true;return;
+    }
+    tb.innerHTML=itens.map(function(it){
+      return '<tr>'+
+        '<td class="name">'+esc(it.nome||'—')+'<div class="email">'+esc(it.email||'')+'</div></td>'+
+        '<td>'+methodTag(it.metodo)+'</td>'+
+        '<td class="dest">'+(it.destino?esc(it.destino):'<span class="warn">sem carteira</span>')+'</td>'+
+        '<td class="num">'+(it.vendas||0)+'</td>'+
+        '<td class="num rec">'+money(it.comissao_cents)+'</td>'+
+      '</tr>';
+    }).join('')+
+      '<tr class="total"><td colspan="4">TOTAL a pagar ('+esc(d.mes||m)+')</td><td class="num">'+money(d.total_cents)+'</td></tr>';
+    document.getElementById('closeBtn').disabled=!(d.total_cents>0);
+  }).catch(function(e){
+    if(e&&e.handled)return;
+    document.getElementById('payErr').textContent=(e&&e.detail)||'Erro ao carregar pagamentos.';
+    document.getElementById('payRows').innerHTML='<tr><td colspan="5" class="empty">Não foi possível carregar.</td></tr>';
+  });
+}
+
+function closeMonth(){
+  var m=document.getElementById('month').value;if(!m)return;
+  if(!confirm('Confirmar que você JÁ PAGOU todos os afiliados do mês '+m+'?\n\nIsto só registra o mês como quitado — o dinheiro é enviado por você, manualmente.'))return;
+  var b=document.getElementById('closeBtn');b.disabled=true;var t=b.textContent;b.textContent='Registrando…';
+  document.getElementById('payOk').textContent='';document.getElementById('payErr').textContent='';
+  adminFetch('/api/af/admin/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:m})})
+   .then(function(){
+     document.getElementById('payOk').textContent='✓ Mês '+m+' marcado como pago.';
+     b.textContent=t;boot();loadPayouts();
+   }).catch(function(e){
+     b.textContent=t;b.disabled=false;
+     if(e&&e.handled)return;
+     document.getElementById('payErr').textContent=(e&&e.detail)||'Erro ao marcar como pago.';
+   });
+}
+
+// ---- início ----
+if(KEY){document.getElementById('gate').classList.add('hide');document.getElementById('app').classList.remove('hide');boot();}
+else{showGate('');}
+</script>
+</body>
+</html>

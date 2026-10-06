@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ferramentas do afiliado · Destravando as Vendas</title>
+<style>
+:root{--bg:#06110f;--ink:#eafaf5;--mut:#8fb3aa;--teal:#15d6b6;--teal2:#0e8c7f;--line:#17302b;--card:#0c1a17}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;padding:20px;overflow-x:hidden}
+.orb{position:fixed;border-radius:50%;filter:blur(70px);opacity:.3;z-index:0}
+.orb.a{width:360px;height:360px;background:#15d6b6;top:-120px;right:-80px}
+.orb.b{width:300px;height:300px;background:#0e8c7f;bottom:-120px;left:-90px}
+.wrap{position:relative;z-index:1;max-width:760px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;gap:.6rem;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.5rem;font-weight:800}
+.m{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:900}
+.nav{display:flex;gap:.9rem;align-items:center}
+.nav a{color:var(--mut);font-size:.85rem;text-decoration:none;cursor:pointer}
+.nav a:hover{color:var(--teal)}
+.hi{color:var(--mut);font-size:.9rem;margin:0 0 1.1rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.2rem;margin-bottom:1rem}
+h2{font-size:1rem;margin:0 0 .3rem}
+.lbl{color:var(--mut);font-size:.82rem;margin-bottom:.6rem}
+.linkbox{display:flex;gap:.5rem;margin-top:.4rem}
+.linkbox input{flex:1;min-width:0;padding:.65rem .7rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.9rem}
+.mini{padding:.65rem .9rem;border:0;border-radius:10px;background:linear-gradient(135deg,#15d6b6,#0e8c7f);color:#04211d;font-weight:800;cursor:pointer;white-space:nowrap}
+.mini:disabled{opacity:.7}
+.mini.sec{background:#123;color:var(--ink);border:1px solid var(--teal2);text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.tpl{background:#071512;border:1px solid var(--line);border-radius:12px;padding:.85rem;margin-top:.7rem}
+.tplhead{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.5rem}
+.pill{font-size:.72rem;padding:.18rem .6rem;border-radius:999px}
+.pill.pg{background:#0f2a22;color:var(--teal)}
+.tpltext{margin:0;font-size:.9rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+.creatives{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem}
+.creative{background:#071512;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.thumb{min-height:120px;display:grid;place-items:center;text-align:center;padding:1rem;font-weight:800;line-height:1.3}
+.thumb.c1{background:linear-gradient(135deg,#0e8c7f,#15d6b6);color:#04211d}
+.thumb.c2{background:linear-gradient(135deg,#0c1a17,#123b33);color:var(--teal);border-bottom:1px solid var(--line)}
+.thumb small{display:block;font-weight:600;font-size:.72rem;opacity:.85;margin-top:.25rem}
+.cbody{padding:.8rem}
+.cbody .t{font-weight:700;font-size:.92rem}
+.cbody .d{color:var(--mut);font-size:.78rem;margin:.25rem 0 .6rem}
+.cacts{display:flex;gap:.5rem}
+.cacts .mini{flex:1;padding:.55rem .6rem;font-size:.85rem;text-align:center}
+.snippet{background:#071512;border:1px solid var(--line);border-radius:10px;padding:.8rem;margin:.5rem 0 .6rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;color:var(--teal);white-space:pre-wrap;word-break:break-all;overflow-x:auto}
+.note{color:var(--mut);font-size:.8rem;margin-top:.5rem}
+@media(max-width:520px){.creatives{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><span class="m">D</span>Ferramentas do afiliado</div>
+    <div class="nav"><a href="/afiliados/painel">Painel</a><a onclick="logout()">sair</a></div>
+  </div>
+  <p class="hi" id="hi">Materiais prontos pra você divulgar e vender mais.</p>
+
+  <div class="card">
+    <h2>Seu link e seu cupom</h2>
+    <div class="lbl">Divulgue o link. Toda venda feita por ele é sua. O cupom dá 10% de desconto pro seguidor e também conta pra você.</div>
+    <div class="linkbox"><input id="link" readonly placeholder="carregando..."><button class="mini" onclick="copyInput(this,'link')">Copiar</button></div>
+    <div class="linkbox"><input id="coupon" readonly placeholder="seu cupom"><button class="mini" onclick="copyInput(this,'coupon')">Copiar</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Copy pronta pra postar</h2>
+    <div class="lbl">Textos prontos pra WhatsApp, Instagram e Status — já com seu link e seu cupom. Toque em "Copiar" e cole.</div>
+    <div id="copybox"></div>
+  </div>
+
+  <div class="card">
+    <h2>Criativos</h2>
+    <div class="lbl">Use a calculadora grátis como isca: a pessoa descobre quanto perde e você oferece o curso.</div>
+    <div class="creatives">
+      <div class="creative">
+        <div class="thumb c1">🧮 Calculadora grátis<small>isca · descubra quanto você perde</small></div>
+        <div class="cbody">
+          <div class="t">Calculadora da taxa</div>
+          <div class="d">Link de isca. Poste primeiro, capte o interesse, depois ofereça o curso.</div>
+          <div class="cacts">
+            <a class="mini sec" href="https://curso.liquix.tech/calculadora.html" target="_blank" rel="noopener">Abrir</a>
+            <button class="mini" onclick="copyStr(this,'https://curso.liquix.tech/calculadora.html')">Copiar link</button>
+          </div>
+        </div>
+      </div>
+      <div class="creative">
+        <div class="thumb c2">📈 Destravando<br>as Vendas<small>página do curso</small></div>
+        <div class="cbody">
+          <div class="t">Página do curso</div>
+          <div class="d">A capa de vendas. Tire print pra usar como criativo ou compartilhe o link direto.</div>
+          <div class="cacts">
+            <a class="mini sec" href="https://curso.liquix.tech/" target="_blank" rel="noopener">Abrir</a>
+            <button class="mini" onclick="copyStr(this,'https://curso.liquix.tech/')">Copiar link</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Widget pro seu site</h2>
+    <div class="lbl">Tem site ou blog? Cole este código e os cliques já entram com a sua indicação automaticamente.</div>
+    <pre class="snippet" id="widget">&lt;script src="https://pagamentos.liquix.tech/afiliados/widget.js" data-ref="SEU-CODE"&gt;&lt;/script&gt;</pre>
+    <button class="mini" onclick="copyWidget(this)">Copiar código</button>
+    <div class="note">Dica: cole logo antes do fechamento de &lt;/body&gt; no HTML do seu site.</div>
+  </div>
+</div>
+<script>
+var TOKEN=null;try{TOKEN=localStorage.getItem('af_token');}catch(e){}
+if(!TOKEN){location.href='/afiliados';}
+function logout(){try{localStorage.removeItem('af_token');localStorage.removeItem('af_code');}catch(e){}location.href='/afiliados';}
+function hdr(){return {'Authorization':'Bearer '+TOKEN};}
+function flash(b){var o=b.textContent;b.textContent='Copiado!';b.disabled=true;setTimeout(function(){b.textContent=o;b.disabled=false;},1400);}
+function copyStr(b,s){if(!s)return;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(s).then(function(){flash(b);}).catch(function(){fallback(b,s);});}else{fallback(b,s);}}
+function fallback(b,s){var ta=document.createElement('textarea');ta.value=s;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');flash(b);}catch(e){}document.body.removeChild(ta);}
+function copyInput(b,id){copyStr(b,document.getElementById(id).value);}
+function copyWidget(b){copyStr(b,document.getElementById('widget').textContent);}
+
+var TPLS=[
+ {tag:'WhatsApp',t:'🚀 Quer destravar suas vendas online? O curso Destravando as Vendas me mostrou o passo a passo pra anunciar em 5 marketplaces e sair do zero.\n\nUsa meu cupom {CUPOM} e ganha 10% de desconto 👉 {LINK}'},
+ {tag:'Instagram',t:'Parei de depender de sorte pra vender 💸\nO Destravando as Vendas ensina a bombar nos marketplaces do jeito certo: anúncio que converte, 5 plataformas e kit pronto.\n\nComeça aqui 👉 {LINK}\nCupom {CUPOM} = 10% OFF ✅'},
+ {tag:'Status',t:'📈 Esse curso destrava suas vendas! Cupom {CUPOM} dá 10% OFF 👉 {LINK}'},
+ {tag:'Prova social',t:'Se você tem um produto bom mas não vende, o problema não é você — é método.\n\nO Destravando as Vendas me deu o passo a passo: anúncio que vende, os 5 maiores marketplaces, afiliados e um kit pronto pra começar hoje.\n\n10% OFF no cupom {CUPOM} 👉 {LINK}'}
+];
+function renderCopies(){
+  var box=document.getElementById('copybox');
+  for(var i=0;i<TPLS.length;i++){(function(tp){
+    var card=document.createElement('div');card.className='tpl';
+    var head=document.createElement('div');head.className='tplhead';
+    var tag=document.createElement('span');tag.className='pill pg';tag.textContent=tp.tag;
+    var btn=document.createElement('button');btn.className='mini';btn.textContent='Copiar';
+    var p=document.createElement('p');p.className='tpltext';p.textContent=tp.t;
+    btn.onclick=function(){copyStr(btn,p.textContent);};
+    head.appendChild(tag);head.appendChild(btn);card.appendChild(head);card.appendChild(p);box.appendChild(card);
+    tp._el=p;
+  })(TPLS[i]);}
+}
+function fillCopies(link,coupon){
+  for(var i=0;i<TPLS.length;i++){var tp=TPLS[i];if(tp._el){tp._el.textContent=tp.t.split('{LINK}').join(link).split('{CUPOM}').join(coupon);}}
+}
+function load(){
+  fetch('/api/af/me',{headers:hdr()}).then(function(r){if(r.status===401){logout();return null;}return r.json();}).then(function(d){
+    if(!d)return;
+    var link=d.link||'';var coupon=d.coupon||'';var code=d.code||'';
+    document.getElementById('link').value=link;
+    document.getElementById('coupon').value=coupon;
+    if(d.name){document.getElementById('hi').textContent='Oi, '+String(d.name).split(' ')[0]+'! Pega teu material pra divulgar 👇';}
+    fillCopies(link,coupon);
+    document.getElementById('widget').textContent='<script src="https://pagamentos.liquix.tech/afiliados/widget.js" data-ref="'+code+'"><'+'/script>';
+  }).catch(function(){});
+}
+renderCopies();
+load();
+</script>
+</body>
+</html>

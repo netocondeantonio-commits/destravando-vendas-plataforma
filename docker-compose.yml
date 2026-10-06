@@ -1,0 +1,20 @@
+name: ponte-pagamentos
+
+services:
+  ponte:
+    build: .
+    env_file: .env
+    volumes:
+      - ponte-data:/data
+    restart: unless-stopped
+    networks: [default, cobrix]
+    # Sem portas publicadas no host. Exposta só pelo Traefik (rota em /etc/traefik/dynamic, via docker cp — ver README).
+    # Ligada tambem a rede do Cobrix p/ chamar http://cobrix:8140 por dentro (sem basic-auth do Traefik).
+
+volumes:
+  ponte-data:
+
+networks:
+  cobrix:
+    external: true
+    name: cobrix_default

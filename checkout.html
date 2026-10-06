@@ -1,0 +1,166 @@
+<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Matrícula — Destravando as Vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+:root{--bg:#0a1413;--card:rgba(22,34,32,.72);--line:rgba(120,200,188,.14);--fg:#eafaf6;--mut:#8fb7af;--teal:#2bc0ac;--teal2:#15d6b6;--ink:#042019;--gold:#e9c06a;--warn:#ff8a63;
+--fd:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;--fb:"Figtree",ui-sans-serif,system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{min-height:100vh;background:var(--bg);color:var(--fg);font-family:var(--fb);line-height:1.55;-webkit-font-smoothing:antialiased;position:relative;overflow-x:hidden}
+/* orbs animados + grão */
+.orb{position:fixed;border-radius:50%;filter:blur(70px);opacity:.5;z-index:0;pointer-events:none;mix-blend-mode:screen;animation:float 16s ease-in-out infinite}
+.orb.a{width:46vmax;height:46vmax;background:radial-gradient(circle,#0f8e7f,transparent 65%);top:-16vmax;right:-12vmax}
+.orb.b{width:38vmax;height:38vmax;background:radial-gradient(circle,#1b5e8a,transparent 65%);bottom:-14vmax;left:-12vmax;animation-delay:-6s}
+.orb.c{width:24vmax;height:24vmax;background:radial-gradient(circle,#13d6b6,transparent 60%);top:40%;left:55%;opacity:.28;animation-delay:-10s}
+@keyframes float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(2vmax,-3vmax) scale(1.08)}}
+body::after{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.05;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.wrap{position:relative;z-index:2;max-width:31rem;margin:0 auto;padding:2rem 1.15rem calc(3rem + env(safe-area-inset-bottom))}
+.brand{display:flex;align-items:center;gap:.6rem;font-family:var(--fd);font-weight:800;font-size:1.12rem;letter-spacing:-.02em;margin-bottom:1.4rem;animation:up .6s .02s both}
+.brand .m{width:2.1rem;height:2.1rem;border-radius:.6rem;background:linear-gradient(135deg,var(--teal2),var(--teal));color:var(--ink);display:grid;place-items:center;font-size:1.15rem;box-shadow:0 6px 20px -6px var(--teal)}
+.glass{background:var(--card);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:1.2rem;padding:1.4rem;margin-bottom:1rem;box-shadow:0 24px 60px -30px #000;animation:up .6s .08s both}
+.plan{display:flex;justify-content:space-between;align-items:center}
+.plan .lbl{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal)}
+.plan b{font-family:var(--fd);font-size:1.3rem;letter-spacing:-.01em;display:block}
+.plan .p{font-family:var(--fd);font-weight:800;font-size:1.7rem;letter-spacing:-.02em;background:linear-gradient(120deg,#fff,var(--teal2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.plan .p small{display:block;font-size:.66rem;color:var(--mut);-webkit-text-fill-color:var(--mut);text-align:right;font-weight:500}
+label{display:block;font-size:.8rem;color:var(--mut);margin:.9rem 0 .3rem;font-weight:600}
+input{width:100%;padding:.8rem .9rem;border-radius:.7rem;border:1px solid var(--line);background:rgba(4,12,11,.6);color:var(--fg);font-size:1rem;font-family:inherit;transition:border-color .2s,box-shadow .2s}
+input::placeholder{color:#5c7a73}
+input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(43,192,172,.18)}
+.methods{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.35rem}
+.methods label{display:flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid var(--line);border-radius:.7rem;padding:.75rem;cursor:pointer;margin:0;color:var(--fg);font-weight:600;transition:all .2s}
+.methods label svg{width:1.1rem;height:1.1rem}
+.methods input{display:none}
+.methods label.sel{border-color:var(--teal);background:rgba(43,192,172,.14);box-shadow:0 0 0 2px rgba(43,192,172,.15)}
+.note{display:flex;gap:.55rem;background:rgba(233,192,106,.1);border:1px solid rgba(233,192,106,.3);border-radius:.7rem;padding:.75rem .85rem;font-size:.83rem;margin-top:.9rem;color:#f3e2bb}
+.note svg{width:1.1rem;height:1.1rem;flex:none;color:var(--gold);margin-top:.1rem}
+.btn{position:relative;width:100%;margin-top:1.1rem;padding:.95rem;border:0;border-radius:.8rem;background:linear-gradient(120deg,var(--teal2),var(--teal));color:var(--ink);font-family:var(--fd);font-weight:800;font-size:1.05rem;cursor:pointer;box-shadow:0 12px 30px -10px var(--teal);transition:transform .12s,box-shadow .2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 18px 40px -12px var(--teal)}
+.btn:active{transform:translateY(0) scale(.99)}
+.btn:disabled{opacity:.6;cursor:default}
+.err{color:var(--warn);font-size:.85rem;margin:.6rem 0 0;min-height:1em}
+.qr{text-align:center}
+.qr img{width:230px;max-width:74%;background:#fff;border-radius:.8rem;padding:.6rem;box-shadow:0 14px 40px -16px #000}
+.copy{display:flex;gap:.45rem;margin-top:.7rem}
+.copy input{font-size:.72rem;font-family:ui-monospace,monospace}
+.copy button{flex:none;border:1px solid var(--teal);background:rgba(43,192,172,.14);color:var(--teal);border-radius:.6rem;padding:.5rem .85rem;font-weight:700;font-family:var(--fd);cursor:pointer}
+.muted{color:var(--mut);font-size:.84rem}
+.ok{font-family:var(--fd);font-weight:800;font-size:1.25rem;color:var(--teal2)}
+.spin{display:inline-block;width:.95rem;height:.95rem;border:2px solid rgba(143,183,175,.4);border-top-color:var(--teal2);border-radius:50%;animation:s .9s linear infinite;vertical-align:-2px;margin-right:.3rem}
+@keyframes s{to{transform:rotate(360deg)}}
+@keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.trust{display:flex;align-items:center;justify-content:center;gap:.4rem;color:var(--mut);font-size:.8rem;margin-top:.3rem}
+.trust svg{width:.95rem;height:.95rem;color:var(--teal)}
+a{color:var(--teal2);font-weight:600}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+<div class="wrap">
+  <div class="brand"><span class="m">D</span>Destravando as Vendas</div>
+  <div class="glass plan">
+    <div><span class="lbl">Plano</span><b id="planName">—</b></div>
+    <div class="p" id="planPrice">—<small id="planSub"></small></div>
+  </div>
+  <div class="glass" id="formCard">
+    <label>Nome completo</label><input id="nome" autocomplete="name" placeholder="Seu nome">
+    <label>E-mail <span style="color:var(--mut);font-weight:400">(onde você acessa o curso)</span></label><input id="email" type="email" autocomplete="email" placeholder="voce@email.com">
+    <label>CPF</label><input id="cpf" inputmode="numeric" placeholder="000.000.000-00">
+    <label>Cupom <span style="color:var(--mut);font-weight:400">(opcional)</span></label><input id="cupom" placeholder="Ex.: NETO10" autocapitalize="characters" style="text-transform:uppercase">
+    <label>Forma de pagamento</label>
+    <div class="methods">
+      <label id="mPix" class="sel"><input type="radio" name="met" value="pix" checked>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>Pix</label>
+      <label id="mCard"><input type="radio" name="met" value="card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Cartão</label>
+    </div>
+    <div class="note" id="pixWarn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+      <div>Pague o Pix com uma conta bancária no <b>mesmo CPF</b> informado. Pagamento de outro CPF <b>não é liberado</b> (segurança).</div>
+    </div>
+    <div id="bumpBox" style="display:none;margin-top:.9rem;border:1px dashed var(--teal2);border-radius:12px;padding:.8rem;background:#071512">
+      <label style="display:flex;gap:.55rem;align-items:flex-start;cursor:pointer;font-size:.9rem">
+        <input type="checkbox" id="bumpChk" style="margin-top:.2rem">
+        <span><b>Sim, quero turbinar!</b> Adicione <b>&ldquo;Vender Sem Estoque como Afiliado&rdquo;</b> por só <b>+ R$ 49,90</b> <span style="color:var(--mut)">— oferta única desta página.</span></span>
+      </label>
+    </div>
+    <button class="btn" id="go">Gerar pagamento</button>
+    <p class="err" id="err"></p>
+    <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Pagamento seguro · acesso liberado na hora</div>
+  </div>
+  <div class="glass" id="result" style="display:none"></div>
+</div>
+<script>
+var PLANS={
+  starter:{label:"Starter",card:54,pix:48.60},
+  pro:{label:"Pro",card:112,pix:100.80},
+  premium:{label:"Premium",card:227,pix:204.30},
+  afiliado:{label:"Afiliado Express",card:49.90,pix:44.91},
+  ponto:{label:"Ponto de Coleta",card:299.90,pix:269.91}
+};
+function brl(n){return 'R$ '+n.toFixed(2).replace('.',',');}
+var q=new URLSearchParams(location.search);var plan=(q.get("plano")||"pro").toLowerCase();if(!PLANS[plan])plan="pro";
+var isCurso=['starter','pro','premium'].indexOf(plan)>=0;
+document.getElementById("planName").textContent=PLANS[plan].label;
+var CUP=(q.get("cupom")||"NETO10").toUpperCase();document.getElementById("cupom").value=CUP;
+var REF=(q.get("ref")||"").trim();
+function met(){var r=document.querySelector('input[name=met]:checked');return r?r.value:'pix';}
+function cupomVal(){return (document.getElementById('cupom').value||'').trim().toUpperCase();}
+function cupomOk(){return cupomVal()==='NETO10';}
+function priceFor(m){return (m==='pix'||cupomOk())?PLANS[plan].pix:PLANS[plan].card;}
+function bumpOn(){var b=document.getElementById('bumpChk');return !!(b&&b.checked);}
+function updatePrice(){var m=met();var total=priceFor(m)+(bumpOn()?49.90:0);
+  document.getElementById("planPrice").childNodes[0].nodeValue=brl(total);
+  document.getElementById("planSub").textContent=(m==='pix'?' no Pix · 10% OFF':' no cartão')+(bumpOn()?' + Afiliado':'');
+}
+if(isCurso){var bb=document.getElementById('bumpBox');if(bb)bb.style.display='block';}
+document.getElementById('cupom').addEventListener('input',updatePrice);
+var _bc=document.getElementById('bumpChk');if(_bc)_bc.addEventListener('change',updatePrice);
+updatePrice();
+Array.prototype.forEach.call(document.querySelectorAll('input[name=met]'),function(r){r.addEventListener('change',function(){
+  document.getElementById('mPix').classList.toggle('sel',met()==='pix');
+  document.getElementById('mCard').classList.toggle('sel',met()==='card');
+  document.getElementById('pixWarn').style.display=met()==='pix'?'flex':'none';
+  updatePrice();
+});});
+var poll=null;
+function startPoll(oid){poll=setInterval(function(){
+  fetch('/order-status/'+oid).then(function(r){return r.json();}).then(function(d){
+    if(d.enrolled){clearInterval(poll);done();}
+    else if(['valor_divergente','failed','canceled','expired'].indexOf(d.status)>=0){clearInterval(poll);
+      document.getElementById('result').innerHTML='<p style="color:var(--warn)">Pagamento não concluído ('+d.status+'). Recarregue e tente de novo.</p>';}
+  }).catch(function(){});
+},4000);}
+function done(){document.getElementById('result').innerHTML='<p class="ok">✓ Pagamento confirmado!</p><p class="muted">Você já está matriculado. Acesse em <a href="https://cursos.liquix.tech/login" target="_blank">cursos.liquix.tech</a> com o e-mail informado.</p>';}
+function copyPix(btn){var i=document.getElementById('pix');navigator.clipboard.writeText(i.value).then(function(){btn.textContent='Copiado!';}).catch(function(){i.select();});}
+document.getElementById("go").addEventListener("click",function(){
+  var email=document.getElementById('email').value.trim();
+  var cpf=document.getElementById('cpf').value.replace(/\D/g,'');
+  var nome=document.getElementById('nome').value.trim();
+  var err=document.getElementById('err');err.textContent='';
+  if(email.indexOf('@')<0){err.textContent='Informe um e-mail válido.';return;}
+  if(met()==='pix'&&cpf.length<11){err.textContent='Informe o CPF (11 dígitos).';return;}
+  var btn=document.getElementById('go');btn.disabled=true;btn.textContent='Gerando...';
+  fetch('/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:plan,method:met(),email:email,name:nome,cpf:cpf,coupon:cupomVal(),ref:REF,bump:bumpOn()})})
+  .then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+  .then(function(o){
+    if(!o.ok){err.textContent=(o.d.detail||'Erro ao gerar pagamento.');btn.disabled=false;btn.textContent='Gerar pagamento';return;}
+    var d=o.d;document.getElementById('formCard').style.display='none';
+    var res=document.getElementById('result');res.style.display='block';
+    if(met()==='pix'){
+      res.innerHTML='<div class="qr"><p class="muted">Escaneie no app do banco ou copie o código:</p>'+
+        (d.qr_image_url?'<img src="'+d.qr_image_url+'">':'')+
+        '<div class="copy"><input id="pix" readonly value="'+(d.qr_copy_paste||'')+'"><button id="cp">Copiar</button></div>'+
+        '<div class="note" style="margin-top:.9rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div>Pague com uma conta no CPF informado, senão não libera.</div></div>'+
+        '<p class="muted" style="margin-top:.8rem"><span class="spin"></span>aguardando pagamento...</p></div>';
+      document.getElementById('cp').addEventListener('click',function(){copyPix(this);});
+      startPoll(d.order_id);
+    }else{
+      res.innerHTML='<p style="font-family:var(--fd);font-weight:700">Finalize no cartão</p><p class="muted">Abrimos a página de pagamento numa nova aba.</p><p><a class="btn" style="display:inline-block;width:auto;text-decoration:none;color:var(--ink)" href="'+d.payment_url+'" target="_blank">Pagar com cartão →</a></p><p class="muted" style="margin-top:.7rem"><span class="spin"></span>aguardando confirmação...</p>';
+      window.open(d.payment_url,'_blank');startPoll(d.order_id);
+    }
+  }).catch(function(){err.textContent='Falha de conexão. Tente de novo.';btn.disabled=false;btn.textContent='Gerar pagamento';});
+});
+</script></body></html>
