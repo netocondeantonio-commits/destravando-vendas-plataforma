@@ -82,6 +82,17 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
 .minibtn:hover{background:#0c221d}
 .minibtn.go{border-color:#4a3c10;color:#f3d57a}
 .age{color:#f3d57a;font-size:.72rem}
+.hbar{display:flex;align-items:center;gap:.55rem;margin:.4rem 0}
+.hbar .hl{width:34%;min-width:84px;max-width:150px;font-size:.8rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbar .htrack{flex:1;background:#071512;border:1px solid var(--line);border-radius:7px;height:20px;overflow:hidden}
+.hbar .hv{height:100%;background:linear-gradient(90deg,#0e8c7f,#15d6b6);border-radius:6px;min-width:3px}
+.hbar .hn{min-width:96px;text-align:right;font-size:.78rem;color:var(--teal);font-weight:700;white-space:nowrap}
+.split{display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#071512;margin:.4rem 0}
+.split .sa,.split .sb{display:flex;align-items:center;justify-content:center;font-size:.73rem;font-weight:800;white-space:nowrap;min-width:0;overflow:hidden}
+.split .sa{background:linear-gradient(90deg,#15d6b6,#0e8c7f);color:#04211d}
+.split .sb{background:#13303a;color:#bfe9df}
+.legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;color:var(--mut);margin-top:.35rem}
+.legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:.35rem;vertical-align:middle}
 .formrow{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem}
 .formrow select,.formrow input{padding:.6rem .65rem;border-radius:10px;border:1px solid var(--line);background:#071512;color:var(--ink);font-size:.9rem}
 .formrow input{flex:1;min-width:160px}
@@ -150,14 +161,31 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
     </div>
     <h2 style="margin-top:1rem">Vendas por dia (últimos 14)</h2>
     <div class="chart" id="a_chart"><div class="empty">—</div></div>
-    <div class="grid2" style="margin-top:1rem">
+    <div class="grid2" style="margin-top:1.1rem">
       <div>
-        <h2>Por plano</h2>
-        <div class="tblwrap"><table style="min-width:0"><thead><tr><th>Plano</th><th class="num">Vendas</th><th class="num">Faturamento</th></tr></thead><tbody id="a_plano"><tr><td colspan="3" class="empty">—</td></tr></tbody></table></div>
+        <h2>Faturamento por plano</h2>
+        <div id="a_plano"><div class="empty">—</div></div>
       </div>
       <div>
-        <h2>Por método</h2>
-        <div class="tblwrap"><table style="min-width:0"><thead><tr><th>Método</th><th class="num">Pagos</th><th class="num">Abandon.</th></tr></thead><tbody id="a_metodo"><tr><td colspan="3" class="empty">—</td></tr></tbody></table></div>
+        <h2>Pix × Cartão (pagos)</h2>
+        <div id="a_metodo"><div class="empty">—</div></div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:1.3rem">💸 Vendas por afiliado</h2>
+    <div class="grid2">
+      <div>
+        <div class="lbl">Quanto do faturamento veio por indicação de afiliado</div>
+        <div id="a_affsplit"><div class="empty">—</div></div>
+        <div class="lbl" style="margin-top:.9rem">Comissões dos afiliados</div>
+        <div class="stats" style="margin-bottom:0">
+          <div class="stat"><div class="n y" id="a_cpend">—</div><div class="l">a pagar</div></div>
+          <div class="stat"><div class="n g" id="a_cpaid">—</div><div class="l">já paga</div></div>
+        </div>
+      </div>
+      <div>
+        <h2 style="margin:0 0 .5rem">🏆 Top afiliados</h2>
+        <div id="a_top"><div class="empty">Nenhuma venda por afiliado ainda.</div></div>
       </div>
     </div>
     <div class="err" id="anErr"></div>
@@ -243,7 +271,8 @@ tr.total td{border-top:2px solid var(--line);border-bottom:0;font-weight:800;fon
   <!-- Carrinhos abandonados -->
   <div class="card hide" id="secC">
     <div class="toolbar">
-      <span class="lbl" style="flex:1;min-width:180px">Quem começou a comprar e não pagou. Mande o lembrete e recupere a venda.</span>
+      <span class="lbl" style="flex:1;min-width:180px">Quem começou a comprar e não pagou. Mande o lembrete e recupere a venda (cupom <b>VOLTA15</b> = 15% off).</span>
+      <button class="ghost" onclick="emailAll(this)">✉️ E-mail p/ todos</button>
       <button class="ghost" onclick="exportCsv('carts')">Exportar (CSV)</button>
       <button class="ghost" onclick="loadCarts()">Atualizar</button>
     </div>
@@ -446,7 +475,14 @@ function loadAnalytics(){
     document.getElementById('a_ticket').textContent=money(k.ticket_cents);
     document.getElementById('a_abn').textContent=k.abandonados!=null?k.abandonados:0;
     document.getElementById('a_abv').textContent=money(k.abandonados_cents);
-    renderChart(d.serie||[]);renderMini('a_plano',d.por_plano||[],'plano');renderMini('a_metodo',d.por_metodo||[],'metodo');
+    var cm=d.comissoes||{};
+    document.getElementById('a_cpend').textContent=money(cm.pending_cents);
+    document.getElementById('a_cpaid').textContent=money(cm.paid_cents);
+    renderChart(d.serie||[]);
+    renderPlano(d.por_plano||[]);
+    renderMetodo(d.por_metodo||[]);
+    renderAffSplit(d.afiliado||{});
+    renderTop(d.top_afiliados||[]);
   }).catch(function(e){if(e&&e.handled)return;document.getElementById('anErr').textContent=(e&&e.detail)||'Erro ao carregar analytics.';});
 }
 function renderChart(serie){
@@ -459,13 +495,41 @@ function renderChart(serie){
     return '<div class="bar" title="'+esc(s.dia)+': '+money(s.cents)+'"><div class="bn">'+(s.vendas||0)+'</div><div class="bv" style="height:'+h+'px"></div><div class="bd">'+dia+'</div></div>';
   }).join('');
 }
-function renderMini(id,rows,kind){
-  var tb=document.getElementById(id);
-  if(!rows.length){tb.innerHTML='<tr><td colspan="3" class="empty">—</td></tr>';return;}
-  tb.innerHTML=rows.map(function(r){
-    if(kind==='plano')return '<tr><td>'+esc(r.plan||'—')+'</td><td class="num">'+(r.vendas||0)+'</td><td class="num rec">'+money(r.cents)+'</td></tr>';
-    return '<tr><td>'+methodTag(r.method)+'</td><td class="num">'+(r.pagos||0)+'</td><td class="num warn">'+(r.abandonados||0)+'</td></tr>';
+function hbarsHTML(items){
+  if(!items.length)return '<div class="empty">Sem vendas ainda.</div>';
+  var max=Math.max.apply(null,items.map(function(i){return i.value||0;}).concat([1]));
+  return items.map(function(i){
+    var pct=Math.max(3,Math.round((i.value||0)/max*100));
+    return '<div class="hbar"><div class="hl">'+esc(i.label)+'</div><div class="htrack"><div class="hv" style="width:'+pct+'%"></div></div><div class="hn">'+i.display+'</div></div>';
   }).join('');
+}
+function renderPlano(rows){
+  document.getElementById('a_plano').innerHTML=hbarsHTML((rows||[]).map(function(r){
+    return {label:(r.plan||'—'),value:r.cents||0,display:money(r.cents)+' · '+(r.vendas||0)};
+  }));
+}
+function renderTop(rows){
+  document.getElementById('a_top').innerHTML=(rows&&rows.length)?hbarsHTML(rows.map(function(r){
+    return {label:(r.name||r.code||'—'),value:r.cents||0,display:money(r.cents)+' · '+(r.vendas||0)};
+  })):'<div class="empty">Nenhuma venda por afiliado ainda.</div>';
+}
+function splitHTML(a,av,b,bv,fmt){
+  var tot=(av||0)+(bv||0);
+  if(!tot)return '<div class="empty">Sem vendas ainda.</div>';
+  var pa=Math.round((av||0)/tot*100),pb=100-pa,f=fmt||function(x){return x;};
+  return '<div class="split">'+
+    ((av||0)?'<div class="sa" style="width:'+pa+'%">'+(pa>=14?(a+' '+pa+'%'):'')+'</div>':'')+
+    ((bv||0)?'<div class="sb" style="width:'+pb+'%">'+(pb>=14?(b+' '+pb+'%'):'')+'</div>':'')+
+    '</div>'+
+    '<div class="legend"><span><span class="dot" style="background:#15d6b6"></span>'+a+' '+f(av||0)+'</span>'+
+    '<span><span class="dot" style="background:#13303a"></span>'+b+' '+f(bv||0)+'</span></div>';
+}
+function renderMetodo(rows){
+  var pix=0,card=0;(rows||[]).forEach(function(r){var m=(r.method||'').toLowerCase();if(m==='pix')pix+=r.pagos||0;else if(m==='card')card+=r.pagos||0;});
+  document.getElementById('a_metodo').innerHTML=splitHTML('Pix',pix,'Cartão',card);
+}
+function renderAffSplit(a){
+  document.getElementById('a_affsplit').innerHTML=splitHTML('Afiliado',a.aff_cents||0,'Direto',a.direto_cents||0,function(c){return money(c);});
 }
 // ---- alunos ----
 function fillPlans(){
@@ -535,7 +599,7 @@ function renderCarts(){
       '<td>'+esc(c.plan_label||c.plan)+'</td>'+
       '<td class="num rec">'+money(c.amount_cents)+'</td>'+
       '<td>'+dt+'<div class="age">'+ageOf(c.created_at||c.quando)+'</div></td>'+
-      '<td><div class="rowbtn"><button class="minibtn" onclick="copyCart('+i+',0,this)">Link</button><button class="minibtn go" onclick="copyCart('+i+',1,this)">Mensagem</button></div></td>'+
+      '<td><div class="rowbtn"><button class="minibtn" onclick="copyCart('+i+',0,this)">Link</button><button class="minibtn go" onclick="copyCart('+i+',1,this)">Mensagem</button><button class="minibtn" onclick="emailCart('+i+',this)">✉️ E-mail</button></div></td>'+
     '</tr>';
   }).join('');
 }
@@ -544,6 +608,27 @@ function copyCart(i,kind,btn){
   var done=function(){var t=btn.textContent;btn.textContent='Copiado!';setTimeout(function(){btn.textContent=t;},1400);};
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(function(){window.prompt('Copie:',txt);});
   else window.prompt('Copie:',txt);
+}
+function emailCart(i,btn){
+  var c=CARTS[i];if(!c)return;var t=btn.textContent;btn.disabled=true;btn.textContent='Enviando…';
+  document.getElementById('cartOk').textContent='';document.getElementById('cartErr').textContent='';
+  adminFetch('/api/af/admin/cart/email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:c.order_id})})
+   .then(function(r){
+     if(r.configurado===false){document.getElementById('cartErr').textContent='E-mail não configurado (falta a chave Resend no .env).';btn.textContent=t;btn.disabled=false;return;}
+     if(r.enviados){document.getElementById('cartOk').textContent='✓ E-mail enviado para '+(c.email||'')+' (cupom VOLTA15).';btn.textContent='Enviado ✓';}
+     else{document.getElementById('cartErr').textContent='Falhou: '+((r.resultados&&r.resultados[0]&&r.resultados[0].error)||'erro');btn.textContent=t;btn.disabled=false;}
+   }).catch(function(e){btn.textContent=t;btn.disabled=false;if(e&&e.handled)return;document.getElementById('cartErr').textContent=(e&&e.detail)||'Erro ao enviar.';});
+}
+function emailAll(btn){
+  if(!CARTS.length){document.getElementById('cartErr').textContent='Nenhum carrinho pra enviar.';return;}
+  if(!confirm('Enviar e-mail de recuperação (cupom VOLTA15 = 15% off) para os '+CARTS.length+' carrinhos abandonados?'))return;
+  var t=btn.textContent;btn.disabled=true;btn.textContent='Enviando…';
+  document.getElementById('cartOk').textContent='';document.getElementById('cartErr').textContent='';
+  adminFetch('/api/af/admin/cart/email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({all:true})})
+   .then(function(r){btn.textContent=t;btn.disabled=false;
+     if(r.configurado===false){document.getElementById('cartErr').textContent='E-mail não configurado (falta a chave Resend no .env).';return;}
+     document.getElementById('cartOk').textContent='✓ '+r.enviados+' de '+r.total+' e-mails enviados.';
+   }).catch(function(e){btn.textContent=t;btn.disabled=false;if(e&&e.handled)return;document.getElementById('cartErr').textContent=(e&&e.detail)||'Erro ao enviar.';});
 }
 // ---- export CSV ----
 function exportCsv(what){window.open('/api/af/admin/export?what='+encodeURIComponent(what)+'&key='+encodeURIComponent(KEY||''),'_blank');}

@@ -56,6 +56,10 @@ PLANS = {
 BUMP_PLAN = "afiliado"  # order bump oferecido no checkout do curso
 
 PIX_DISCOUNT = 0.90  # 10% off no Pix (cartão = preço cheio)
+RECOVERY_COUPON = env("RECOVERY_COUPON", "VOLTA15").upper()      # cupom de recuperação de carrinho
+RECOVERY_DISCOUNT = float(env("RECOVERY_DISCOUNT", "0.85"))      # 15% off (os 10% + 5% a mais)
+RESEND_API_KEY = env("RESEND_API_KEY", "")                       # e-mail transacional (Resend)
+RESEND_FROM = env("RESEND_FROM", "Liquix <noreply@liquix.tech>")
 
 app = FastAPI(title="Ponte Vende em Tudo")
 
@@ -391,11 +395,12 @@ async def checkout(req: Request):
     ref = (d.get("ref") or "").strip()
     ref_af = get_affiliate(code=ref) if ref else None
     coupon_af = None
-    if raw_coupon and raw_coupon.upper() != "NETO10":
+    if raw_coupon and raw_coupon.upper() not in ("NETO10", RECOVERY_COUPON):
         coupon_af = get_affiliate(coupon=raw_coupon.upper()) or get_affiliate(code=raw_coupon)
     the_af = ref_af or coupon_af
     affiliate_code = the_af["code"] if the_af else None
     coupon_ok = (raw_coupon.upper() == "NETO10") or bool(coupon_af)  # 10% off: NETO10 ou cupom de influencer
+    is_recovery = raw_coupon.upper() == RECOVERY_COUPON             # cupom de recuperação: 15% (10% + 5%)
     bump = BUMP_PLAN if (d.get("bump") and plan in ("starter", "pro", "premium") and BUMP_PLAN in PLANS) else None
     if plan not in PLANS or method not in ("pix", "card") or "@" not in email:
         raise HTTPException(400, "dados inválidos (plan/method/email)")
@@ -409,7 +414,8 @@ async def checkout(req: Request):
     if method == "pix":
         if len(cpf) < 11:
             raise HTTPException(400, "CPF obrigatório no Pix")
-        pix_cents = round(p["amount_cents"] * PIX_DISCOUNT) + bump_cents  # 10% off no Pix (+ bump flat)
+        disc = RECOVERY_DISCOUNT if is_recovery else PIX_DISCOUNT
+        pix_cents = round(p["amount_cents"] * disc) + bump_cents  # 10% (ou 15% recuperação) off no Pix (+ bump flat)
         o["amount_cents"] = pix_cents
         ch = await cobrix_create_charge(name or email, cpf, pix_cents, desc)
         o["provider_ref"] = ch.get("id")
@@ -419,9 +425,10 @@ async def checkout(req: Request):
                 "amount_cents": pix_cents, "charge_id": ch.get("id")}
     else:
         ip = req.headers.get("x-forwarded-for", "").split(",")[0].strip() or (req.client.host if req.client else "")
-        card_usdt = round(float(p["usdt"]) * (PIX_DISCOUNT if coupon_ok else 1.0)
+        cfac = RECOVERY_DISCOUNT if is_recovery else (PIX_DISCOUNT if coupon_ok else 1.0)
+        card_usdt = round(float(p["usdt"]) * cfac
                           + (float(PLANS[BUMP_PLAN]["usdt"]) if bump else 0.0), 2)
-        o["amount_cents"] = round(p["amount_cents"] * (PIX_DISCOUNT if coupon_ok else 1.0)) + bump_cents
+        o["amount_cents"] = round(p["amount_cents"] * cfac) + bump_cents
         o["provider_ref"] = order_id  # Changelly usa o order_id
         save_order(o)
         pay = await changelly_create_payment(order_id, ("%.2f" % card_usdt), email, ip, desc)
@@ -623,6 +630,22 @@ async def af_admin_analytics(req: Request):
                FROM orders WHERE method!='cortesia' GROUP BY method""")]
         serie = [dict(r) for r in con.execute(
             "SELECT substr(COALESCE(updated_at,created_at),1,10) dia, COUNT(*) vendas, COALESCE(SUM(amount_cents),0) cents FROM orders WHERE " + PAID + " GROUP BY dia ORDER BY dia DESC LIMIT 14")]
+        aff_rows = con.execute(
+            "SELECT CASE WHEN affiliate_code IS NOT NULL AND affiliate_code!='' THEN 1 ELSE 0 END viaaff, "
+            "COUNT(*) v, COALESCE(SUM(amount_cents),0) c FROM orders WHERE " + PAID + " GROUP BY viaaff").fetchall()
+        top_aff = [dict(r) for r in con.execute(
+            "SELECT o.affiliate_code code, COALESCE(a.name,o.affiliate_code) name, COUNT(*) vendas, COALESCE(SUM(o.amount_cents),0) cents "
+            "FROM orders o LEFT JOIN affiliates a ON a.code=o.affiliate_code "
+            "WHERE " + PAID + " AND o.affiliate_code IS NOT NULL AND o.affiliate_code!='' "
+            "GROUP BY o.affiliate_code ORDER BY cents DESC LIMIT 8")]
+        cpend = scalar("SELECT SUM(cents) FROM commissions WHERE status='pending'")
+        cpaid = scalar("SELECT SUM(cents) FROM commissions WHERE status='paid'")
+    afiliado = {"aff_vendas": 0, "aff_cents": 0, "direto_vendas": 0, "direto_cents": 0}
+    for r in aff_rows:
+        if r["viaaff"] == 1:
+            afiliado["aff_vendas"] = r["v"]; afiliado["aff_cents"] = r["c"]
+        else:
+            afiliado["direto_vendas"] = r["v"]; afiliado["direto_cents"] = r["c"]
     conv = round(vendas * 100.0 / checkouts, 1) if checkouts else 0.0
     ticket = round(fat_total / vendas) if vendas else 0
     return {"mes": ym,
@@ -631,7 +654,9 @@ async def af_admin_analytics(req: Request):
                     "conversao": conv, "ticket_cents": ticket,
                     "abandonados": abn, "abandonados_cents": abn_cents},
             "por_plano": por_plano, "por_metodo": por_metodo,
-            "serie": list(reversed(serie))}
+            "serie": list(reversed(serie)),
+            "afiliado": afiliado, "top_afiliados": top_aff,
+            "comissoes": {"pending_cents": cpend, "paid_cents": cpaid}}
 
 @app.get("/api/af/admin/carts")
 async def af_admin_carts(req: Request):
@@ -646,13 +671,13 @@ async def af_admin_carts(req: Request):
     for r in rows:
         plan = r["plan"] or ""
         label = PLANS.get(plan, {}).get("label", plan)
-        link = PUBLIC_BASE + "/comprar?plano=" + plan
+        link = PUBLIC_BASE + "/comprar?plano=" + plan + "&cupom=" + RECOVERY_COUPON
         if r.get("affiliate_code"):
             link += "&ref=" + r["affiliate_code"]
         nome1 = (r["name"] or "").strip().split(" ")[0]
         ola = ("Oi " + nome1) if nome1 else "Oi"
         msg = (ola + "! Vi que você começou a garantir o curso *" + label + "* e não finalizou. "
-               "Ainda dá tempo — e com o cupom *NETO10* você ganha 10% de desconto no Pix. "
+               "Ainda dá tempo — e com o cupom *" + RECOVERY_COUPON + "* você ganha 15% de desconto. "
                "É só terminar por aqui: " + link)
         carrinhos.append({"order_id": r["order_id"], "email": r["email"], "name": r["name"] or "",
                           "plan": plan, "plan_label": label, "amount_cents": r["amount_cents"],
@@ -749,6 +774,37 @@ async def af_admin_export(req: Request):
     return PlainTextResponse(buf.getvalue(), media_type="text/csv",
                              headers={"Content-Disposition": 'attachment; filename="%s"' % fname})
 
+@app.post("/api/af/admin/cart/email")
+async def af_admin_cart_email(req: Request):
+    require_admin(req)
+    d = await req.json()
+    with contextlib.closing(db()) as con:
+        if d.get("all"):
+            oids = [r[0] for r in con.execute(
+                "SELECT order_id FROM orders WHERE enrolled=0 AND status!='paid' ORDER BY created_at DESC LIMIT 200")]
+        else:
+            oid = (d.get("order_id") or "").strip()
+            oids = [oid] if oid else []
+    disc_pct = round((1.0 - RECOVERY_DISCOUNT) * 100)
+    results, sent = [], 0
+    for oid in oids:
+        o = find_order(order_id=oid)
+        if not o or o.get("enrolled") or o.get("status") == "paid":
+            results.append({"order_id": oid, "ok": False, "error": "não elegível"}); continue
+        email = (o.get("email") or "").strip()
+        if "@" not in email:
+            results.append({"order_id": oid, "ok": False, "error": "sem e-mail"}); continue
+        plan = o["plan"]; label = PLANS.get(plan, {}).get("label", plan)
+        link = PUBLIC_BASE + "/comprar?plano=" + plan + "&cupom=" + RECOVERY_COUPON
+        if o.get("affiliate_code"):
+            link += "&ref=" + o["affiliate_code"]
+        html = recovery_email_html(o.get("name"), label, link, RECOVERY_COUPON, disc_pct)
+        res = await send_email(email, "Faltou pouco pro seu curso 🚀 (cupom de %d%%)" % disc_pct, html)
+        if res.get("ok"):
+            sent += 1
+        results.append({"order_id": oid, "email": email, "ok": res.get("ok"), "error": res.get("error")})
+    return {"enviados": sent, "total": len(oids), "configurado": bool(RESEND_API_KEY), "resultados": results}
+
 @app.get("/api/af/admin/payouts")
 async def af_admin_payouts(req: Request):
     require_admin(req)
@@ -804,6 +860,38 @@ async def crypto_send(method, address, cents, idem, name):
             return {"ok": ok, "txid": j.get("txid") or j.get("tx"), "raw": j}
         return {"ok": False, "error": "%s: %s" % (r.status_code, r.text[:140])}
     return {"ok": False, "error": "método sem envio automático: " + method}
+
+async def send_email(to, subject, html):
+    """E-mail transacional via Resend (só envia se RESEND_API_KEY estiver configurada)."""
+    if not RESEND_API_KEY:
+        return {"ok": False, "error": "e-mail não configurado (RESEND_API_KEY)"}
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post("https://api.resend.com/emails",
+                             headers={"Authorization": "Bearer " + RESEND_API_KEY, "Content-Type": "application/json"},
+                             json={"from": RESEND_FROM, "to": [to], "subject": subject, "html": html})
+        if r.status_code in (200, 201):
+            return {"ok": True, "id": (r.json() or {}).get("id")}
+        return {"ok": False, "error": "%s: %s" % (r.status_code, r.text[:160])}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:160]}
+
+def recovery_email_html(name, label, link, coupon, disc_pct):
+    nome1 = (name or "").strip().split(" ")[0]
+    ola = ("Oi " + nome1) if nome1 else "Oi"
+    return (
+        '<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:520px;margin:auto;color:#0b1f1a">'
+        '<h2 style="color:#0e8c7f;margin:0 0 8px">' + ola + '! Faltou pouco 🚀</h2>'
+        '<p>Você começou a garantir o curso <b>' + label + '</b> e não finalizou — guardei sua vaga.</p>'
+        '<p>Pra te dar um empurrãozinho, use o cupom '
+        '<b style="background:#e9fbf5;padding:3px 10px;border-radius:6px;letter-spacing:1px">' + coupon + '</b> '
+        'e ganhe <b>' + str(disc_pct) + '% de desconto</b>.</p>'
+        '<p style="text-align:center;margin:26px 0">'
+        '<a href="' + link + '" style="background:#15d6b6;color:#04211d;font-weight:800;text-decoration:none;padding:14px 26px;border-radius:12px;display:inline-block">Terminar minha compra</a>'
+        '</p>'
+        '<p style="color:#6b8c84;font-size:13px">Oferta por tempo limitado. Dúvida? É só responder este e-mail.</p>'
+        '<p style="color:#9fb8b0;font-size:12px;margin-top:18px">Destravando as Vendas · Liquix</p>'
+        '</div>')
 
 @app.post("/api/af/admin/pay")
 async def af_admin_pay(req: Request):

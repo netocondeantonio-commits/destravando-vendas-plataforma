@@ -109,11 +109,17 @@ var REF=(q.get("ref")||"").trim();
 function met(){var r=document.querySelector('input[name=met]:checked');return r?r.value:'pix';}
 function cupomVal(){return (document.getElementById('cupom').value||'').trim().toUpperCase();}
 function cupomOk(){return cupomVal()==='NETO10';}
-function priceFor(m){return (m==='pix'||cupomOk())?PLANS[plan].pix:PLANS[plan].card;}
+function isRecov(){return cupomVal()==='VOLTA15';}
+function r2(n){return Math.round(n*100)/100;}
+function priceFor(m){
+  if(isRecov())return r2(PLANS[plan].card*0.85);
+  return (m==='pix'||cupomOk())?PLANS[plan].pix:PLANS[plan].card;
+}
 function bumpOn(){var b=document.getElementById('bumpChk');return !!(b&&b.checked);}
 function updatePrice(){var m=met();var total=priceFor(m)+(bumpOn()?49.90:0);
   document.getElementById("planPrice").childNodes[0].nodeValue=brl(total);
-  document.getElementById("planSub").textContent=(m==='pix'?' no Pix · 10% OFF':' no cartão')+(bumpOn()?' + Afiliado':'');
+  var sub=isRecov()?' · 15% OFF':(m==='pix'?' no Pix · 10% OFF':' no cartão');
+  document.getElementById("planSub").textContent=sub+(bumpOn()?' + Afiliado':'');
 }
 if(isCurso){var bb=document.getElementById('bumpBox');if(bb)bb.style.display='block';}
 document.getElementById('cupom').addEventListener('input',updatePrice);
