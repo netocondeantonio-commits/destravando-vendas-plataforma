@@ -60,7 +60,7 @@ RECOVERY_COUPON = env("RECOVERY_COUPON", "VOLTA15").upper()      # cupom de recu
 RECOVERY_DISCOUNT = float(env("RECOVERY_DISCOUNT", "0.85"))      # 15% off (os 10% + 5% a mais)
 RESEND_API_KEY = env("RESEND_API_KEY", "")                       # e-mail transacional (Resend)
 RESEND_FROM = env("RESEND_FROM", "Liquix <noreply@liquix.tech>")
-OWNER_EMAIL = env("OWNER_EMAIL", "digitalsoberano05@gmail.com")   # avisos pro dono
+OWNER_EMAIL = env("OWNER_EMAIL", "")   # avisos pro dono (definido no .env do servidor)
 META_PIXEL_ID = env("META_PIXEL_ID", "")                          # Meta Pixel (tráfego pago)
 META_CAPI_TOKEN = env("META_CAPI_TOKEN", "")                      # Conversions API (server-side)
 
